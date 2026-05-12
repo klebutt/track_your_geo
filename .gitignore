@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+tygeo-venv/
+.env
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# uv
+.uv/
+
+# Data / local DB
+data/
+*.db
+
+# Node / frontend
+node_modules/
+apps/web/dist/
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Logs
+*.log
+
+# DeepEval
+.deepeval/
