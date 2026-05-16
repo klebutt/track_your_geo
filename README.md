@@ -1,6 +1,6 @@
 # Track Your GEO — prototype
 
-Local-only demo for **journeys 1, 2, and 4** from the product brief: discover visibility, diagnose gaps, and suggested actions. **Demo brands** (real company names, locations, competitors, and GEO query templates) are **hardcoded** in [`apps/api/tygeo/hardcoded_pilots.py`](apps/api/tygeo/hardcoded_pilots.py); change that file to swap the built-in targets. For how this score relates to consumer ChatGPT-style search, see [`docs/geo-scoring-realism.md`](docs/geo-scoring-realism.md).
+Local-only demo for **journeys 1, 2, and 4** from the product brief: discover visibility, diagnose gaps, and suggested actions. **Demo brands** (real company names, locations, competitors, and GEO query templates) are **hardcoded** in [`apps/api/tygeo/hardcoded_pilots.py`](apps/api/tygeo/hardcoded_pilots.py); change that file to swap the built-in targets. For how this score relates to consumer ChatGPT-style search, see [`docs/geo-scoring-realism.md`](docs/geo-scoring-realism.md). For human–agent session workflow (orient, plan, approve, validate, worklog), see [`AGENTS.md`](AGENTS.md).
 
 ## Prerequisites
 
