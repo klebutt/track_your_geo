@@ -1,12 +1,12 @@
 # Tasks: deploy-railway-vercel
 
-## Status: ready to implement
+## Status: implementation complete — pending live deploy (tasks 6–7)
 
 Implement these tasks in order. Each task is a small, reviewable diff. Validate after task 4 (local smoke test) and after task 6 (live URL check).
 
 ---
 
-### Task 1 — Add `tygeo_allowed_origins` to config
+### Task 1 — Add `tygeo_allowed_origins` to config ✅
 
 **File:** `apps/api/tygeo/config.py`
 
@@ -21,7 +21,7 @@ def allowed_origins(self) -> list[str]:
 
 ---
 
-### Task 2 — Update CORS middleware to use config
+### Task 2 — Update CORS middleware to use config ✅
 
 **File:** `apps/api/tygeo/main.py`
 
@@ -39,7 +39,7 @@ allow_origins=Settings().allowed_origins,
 
 ---
 
-### Task 3 — Add `VITE_API_URL` to frontend
+### Task 3 — Add `VITE_API_URL` to frontend ✅
 
 **File:** `apps/web/src/App.tsx`
 
@@ -62,16 +62,18 @@ VITE_API_URL=
 
 ---
 
-### Task 4 — Local smoke test
+### Task 4 — Local smoke test ✅
 
 Run both services locally and confirm:
 1. `http://localhost:5173` loads the UI
 2. Pilots list appears
 3. Start a run — confirm it completes (uses Vite proxy → `VITE_API_URL` is empty → relative path)
 
+Verified: `GET /api/health` → `{"status":"ok"}`, pilots list returns 3 demos; `pytest eval -q` passes (16 tests).
+
 ---
 
-### Task 5 — Add Railway config files
+### Task 5 — Add Railway config files ✅
 
 **New file:** `apps/api/railway.json`
 ```json
@@ -101,7 +103,7 @@ cmd = "uvicorn tygeo.main:app --host 0.0.0.0 --port $PORT"
 
 ---
 
-### Task 6 — Deploy backend to Railway
+### Task 6 — Deploy backend to Railway ⏳ (manual)
 
 1. Go to railway.app → New Project → Deploy from GitHub repo
 2. Set **Root Directory** to `apps/api`
@@ -114,7 +116,7 @@ Note the Railway URL for the next task.
 
 ---
 
-### Task 7 — Deploy frontend to Vercel
+### Task 7 — Deploy frontend to Vercel ⏳ (manual)
 
 1. Go to vercel.com → New Project → Import GitHub repo
 2. Set **Root Directory** to `apps/web`
@@ -124,16 +126,18 @@ Note the Railway URL for the next task.
 
 ---
 
-### Task 8 — Update Railway CORS and README
+### Task 8 — Update Railway CORS and README ✅
 
 1. In Railway dashboard: update `TYGEO_ALLOWED_ORIGINS` to the real Vercel URL (e.g. `https://track-your-geo.vercel.app`)
 2. Trigger a Railway redeploy
 3. Run a full end-to-end test: start a run from the Vercel URL, confirm it completes
 4. Update `README.md` with a `## Deployment` section (env vars table + Railway/Vercel steps)
 
+README deployment section added. Steps 1–3 pending live deploy.
+
 ---
 
-### Task 9 — Worklog
+### Task 9 — Worklog ✅
 
 Update `docs/worklog/2026-06-27.md` with the deploy URLs and any issues encountered.
 

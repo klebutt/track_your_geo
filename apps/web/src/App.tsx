@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
+
 type PilotSummary = {
   id: string
   brand_name: string
@@ -100,7 +102,7 @@ function App() {
     setLoadingPilots(true)
     setError(null)
     try {
-      const list = await fetchJson<PilotSummary[]>('/api/pilots')
+      const list = await fetchJson<PilotSummary[]>(`${API_BASE}/api/pilots`)
       setPilots(list)
       setPilotId((prev) =>
         prev && list.some((p) => p.id === prev) ? prev : (list[0]?.id ?? ''),
@@ -124,7 +126,7 @@ function App() {
     let cancelled = false
     void (async () => {
       try {
-        const d = await fetchJson<PilotDetail>(`/api/pilots/${encodeURIComponent(pilotId)}`)
+        const d = await fetchJson<PilotDetail>(`${API_BASE}/api/pilots/${encodeURIComponent(pilotId)}`)
         if (!cancelled) {
           setPilotDetail(d)
           setBrand(d.brand_name)
@@ -158,7 +160,7 @@ function App() {
       } = { pilot_id: pilotId }
       if (brand.trim()) body.brand_name = brand.trim()
       if (location.trim()) body.location = location.trim()
-      const r = await fetchJson<Run>('/api/runs', {
+      const r = await fetchJson<Run>(`${API_BASE}/api/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

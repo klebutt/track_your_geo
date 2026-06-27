@@ -185,3 +185,47 @@ If you use [uv](https://github.com/astral-sh/uv): `uv sync` then `uv run pip ins
 ### Data
 
 SQLite database file defaults to `./data/tygeo.db` (created on first run). Add `data/` to backups if you care about historical runs.
+
+---
+
+## Deployment
+
+Production layout: **Vercel** serves the static React app; the browser calls **Railway** (FastAPI) directly. SQLite lives on a Railway volume so run history survives redeploys.
+
+### Environment variables
+
+| Variable | Where | Value |
+|----------|-------|-------|
+| `OPENAI_API_KEY` | Railway | Your OpenAI API key |
+| `TYGEO_ALLOWED_ORIGINS` | Railway | `https://<your-app>.vercel.app` (comma-separated if multiple) |
+| `TYGEO_DATABASE_URL` | Railway | `sqlite:////data/tygeo.db` |
+| `TYGEO_MODEL` | Railway | `gpt-4o-mini` (default) |
+| `TYGEO_PROBE_MODEL` | Railway | `gpt-4o-mini-search-preview` (default) |
+| `VITE_API_URL` | Vercel | `https://<your-app>.up.railway.app` |
+
+Locally, leave `VITE_API_URL` unset so the Vite dev proxy handles `/api` requests.
+
+### Railway (backend)
+
+1. [railway.app](https://railway.app) → **New Project** → Deploy from GitHub.
+2. Set **Root Directory** to `apps/api`.
+3. Add environment variables from the table above. For the first deploy, set `TYGEO_ALLOWED_ORIGINS=*` until you have the Vercel URL.
+4. Add a **Volume** mounted at `/data`.
+5. Confirm health: `GET https://<app>.up.railway.app/api/health` → `{"status":"ok"}`.
+
+Config files: [`apps/api/railway.json`](apps/api/railway.json), [`apps/api/nixpacks.toml`](apps/api/nixpacks.toml).
+
+### Vercel (frontend)
+
+1. [vercel.com](https://vercel.com) → **New Project** → Import the GitHub repo.
+2. Set **Root Directory** to `apps/web`.
+3. Build command: `npm run build`; output directory: `dist`.
+4. Set `VITE_API_URL` to your Railway URL (no trailing slash).
+5. Deploy and confirm the pilots list loads.
+
+### After both are live
+
+1. Update Railway `TYGEO_ALLOWED_ORIGINS` to your real Vercel URL (replace `*`).
+2. Redeploy Railway.
+3. Run a full analysis from the Vercel URL and check the browser console for CORS errors.
+4. Redeploy Railway once more and confirm prior run history still appears (volume persistence).
