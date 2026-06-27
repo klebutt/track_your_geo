@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 Base = declarative_base()
@@ -17,6 +17,19 @@ def init_db(database_url: str) -> None:
     _engine = create_engine(database_url, connect_args=connect_args)
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
     Base.metadata.create_all(bind=_engine)
+    _migrate_sqlite(_engine)
+
+
+def _migrate_sqlite(engine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
+    insp = inspect(engine)
+    if "query_results" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("query_results")}
+    if "cited_domains" not in cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE query_results ADD COLUMN cited_domains JSON"))
 
 
 def get_engine():

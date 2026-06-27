@@ -44,6 +44,7 @@ class QueryResult(Base):
     response_text: Mapped[str] = mapped_column(Text)
     brand_mentioned: Mapped[bool] = mapped_column(default=False)
     competitors_mentioned: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    cited_domains: Mapped[list | None] = mapped_column(JSON, nullable=True)
     latency_ms: Mapped[float] = mapped_column(Float, default=0.0)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)

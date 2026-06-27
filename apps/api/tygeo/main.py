@@ -77,6 +77,7 @@ def api_get_pilot(pilot_id: str, settings: Settings = Depends(get_settings)):
         competitors=p.competitors,
         queries=p.queries,
         seed_domains=p.seed_domains,
+        brand_domains=p.brand_domains,
     )
 
 

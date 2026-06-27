@@ -217,3 +217,34 @@ tr.miss td {
 .seed-list li {
   margin-bottom: 0.25rem;
 }
+
+.cited-domains {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.domain-chip {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-family: ui-monospace, monospace;
+}
+
+.domain-chip.brand_owned {
+  background: #ccfbf1;
+  color: #115e59;
+  border: 1px solid #99f6e4;
+}
+
+.domain-chip.third_party {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.cited-empty {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}

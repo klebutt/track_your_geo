@@ -15,6 +15,7 @@ class PilotProfile(BaseModel):
     competitors: list[str] = Field(default_factory=list)
     queries: list[str] = Field(default_factory=list)
     seed_domains: list[str] = Field(default_factory=list)
+    brand_domains: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_yaml(cls, path: Path) -> PilotProfile:

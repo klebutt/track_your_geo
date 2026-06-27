@@ -89,7 +89,7 @@ You need a developer (or someone comfortable with a terminal) to start the app o
 2. Choose a **demo brand** from the dropdown.
 3. Click **Run analysis** and review visibility, each Q&A, and competitors.
 
-Built-in demos are defined in code ([`hardcoded_pilots.py`](apps/api/tygeo/hardcoded_pilots.py)) — today **Dishoom** (London) and **Clio** (UK). Setup steps are under [For developers](#for-developers) below.
+Built-in demos are defined in code ([`hardcoded_pilots.py`](apps/api/tygeo/hardcoded_pilots.py)) — **Dishoom** (London), **Clio** (UK legal tech), and **SDL Surveying** (UK residential surveys). Setup steps are under [For developers](#for-developers) below.
 
 Each run uses your **OpenAI API key** (or another configured provider) and incurs a small per-question cost; the UI shows approximate spend for the run.
 
@@ -129,7 +129,7 @@ python -m venv tygeo-venv
 
 ```powershell
 Copy-Item .env.example .env
-# Edit .env: set OPENAI_API_KEY and optionally TYGEO_MODEL (default gpt-4o-mini)
+# Edit .env: set OPENAI_API_KEY; probes use TYGEO_PROBE_MODEL (default gpt-4o-mini-search-preview)
 ```
 
 3. Start the API (terminal A), from repo root:

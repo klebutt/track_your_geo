@@ -30,6 +30,20 @@ def _extract_json_array(text: str) -> list[dict[str, Any]]:
     return []
 
 
+def _usage_tokens(response: Any) -> tuple[int, int]:
+    usage = getattr(response, "usage", None)
+    pt = getattr(usage, "prompt_tokens", None) if usage else None
+    ct = getattr(usage, "completion_tokens", None) if usage else None
+    if pt is None and usage and isinstance(usage, dict):
+        pt = usage.get("prompt_tokens", 0)
+        ct = usage.get("completion_tokens", 0)
+    if pt is None:
+        pt = 0
+    if ct is None:
+        ct = 0
+    return int(pt), int(ct)
+
+
 def complete(
     settings: Settings,
     messages: list[dict[str, str]],
@@ -49,17 +63,7 @@ def complete(
 
     choice = response.choices[0]
     text = choice.message.content or ""
-
-    usage = getattr(response, "usage", None)
-    pt = getattr(usage, "prompt_tokens", None) if usage else None
-    ct = getattr(usage, "completion_tokens", None) if usage else None
-    if pt is None and usage and isinstance(usage, dict):
-        pt = usage.get("prompt_tokens", 0)
-        ct = usage.get("completion_tokens", 0)
-    if pt is None:
-        pt = 0
-    if ct is None:
-        ct = 0
+    pt, ct = _usage_tokens(response)
 
     try:
         cost = float(completion_cost(completion_response=response))
@@ -69,24 +73,69 @@ def complete(
     meta = {
         "model": settings.tygeo_model,
         "latency_ms": latency_ms,
-        "prompt_tokens": int(pt),
-        "completion_tokens": int(ct),
+        "prompt_tokens": pt,
+        "completion_tokens": ct,
         "cost_usd": cost,
     }
     return text, meta
 
 
-def run_geo_query(settings: Settings, user_prompt: str) -> tuple[str, dict[str, Any]]:
+def run_geo_query(
+    settings: Settings,
+    user_prompt: str,
+    *,
+    location: str | None = None,
+) -> tuple[str, dict[str, Any], list[Any]]:
+    """GEO probe via OpenAI search model; returns text, metadata, and url_citation annotations."""
+    if settings.openai_api_key:
+        litellm.api_key = settings.openai_api_key
+
     system = (
-        "You are answering as a general knowledge assistant. "
-        "Answer naturally; do not fabricate citations. "
-        "If the user asks for options in a region, list plausible well-known options."
+        "You are answering as a general knowledge assistant with web search. "
+        "Answer naturally for the user's location when relevant. "
+        "List specific venues or products by name when asked."
     )
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": user_prompt},
     ]
-    return complete(settings, messages)
+
+    web_search_options: dict[str, Any] = {
+        "search_context_size": settings.tygeo_search_context_size,
+    }
+    if location:
+        web_search_options["user_location"] = {
+            "type": "approximate",
+            "approximate": {"region": location},
+        }
+
+    t0 = time.perf_counter()
+    response = litellm.completion(
+        model=settings.tygeo_probe_model,
+        messages=messages,
+        web_search_options=web_search_options,
+    )
+    latency_ms = (time.perf_counter() - t0) * 1000
+
+    choice = response.choices[0]
+    text = choice.message.content or ""
+    annotations = getattr(choice.message, "annotations", None) or []
+    pt, ct = _usage_tokens(response)
+
+    try:
+        cost = float(completion_cost(completion_response=response))
+    except Exception:
+        cost = 0.0
+
+    meta = {
+        "model": settings.tygeo_probe_model,
+        "probe_path": "web_search",
+        "latency_ms": latency_ms,
+        "prompt_tokens": pt,
+        "completion_tokens": ct,
+        "cost_usd": cost,
+    }
+    return text, meta, list(annotations)
 
 
 def run_recommendations(

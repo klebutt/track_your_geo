@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class PilotSummary(BaseModel):
@@ -15,6 +17,12 @@ class PilotDetail(PilotSummary):
     competitors: list[str]
     queries: list[str]
     seed_domains: list[str] = Field(default_factory=list)
+    brand_domains: list[str] = Field(default_factory=list)
+
+
+class CitedDomainOut(BaseModel):
+    domain: str
+    kind: Literal["brand_owned", "third_party"]
 
 
 class RunCreate(BaseModel):
@@ -29,8 +37,14 @@ class QueryResultOut(BaseModel):
     response_text: str
     brand_mentioned: bool
     competitors_mentioned: dict[str, bool] | None
+    cited_domains: list[CitedDomainOut] = Field(default_factory=list)
     latency_ms: float
     cost_usd: float
+
+    @field_validator("cited_domains", mode="before")
+    @classmethod
+    def _coerce_cited_domains(cls, value: object) -> object:
+        return value or []
 
     model_config = {"from_attributes": True}
 

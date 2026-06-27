@@ -12,6 +12,12 @@ type PilotDetail = PilotSummary & {
   competitors: string[]
   queries: string[]
   seed_domains: string[]
+  brand_domains: string[]
+}
+
+type CitedDomain = {
+  domain: string
+  kind: 'brand_owned' | 'third_party'
 }
 
 type QueryResult = {
@@ -20,8 +26,25 @@ type QueryResult = {
   response_text: string
   brand_mentioned: boolean
   competitors_mentioned: Record<string, boolean> | null
+  cited_domains: CitedDomain[]
   latency_ms: number
   cost_usd: number
+}
+
+function CitedDomainChips({ cited }: { cited: CitedDomain[] | undefined }) {
+  if (!cited?.length) {
+    return <span className="cited-empty">No domains cited</span>
+  }
+  return (
+    <div className="cited-domains">
+      {cited.map((c) => (
+        <span key={c.domain} className={`domain-chip ${c.kind}`} title={c.kind === 'brand_owned' ? 'Brand-owned domain' : 'Third-party domain'}>
+          {c.domain}
+          {c.kind === 'brand_owned' ? ' · yours' : ''}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 type Recommendation = {
@@ -162,10 +185,12 @@ function App() {
       </header>
 
       <div className="disclaimer">
-        <strong>Limitations:</strong> Results reflect this model and API path only — not parity with
-        consumer chat products or browsing-enabled modes. Visibility uses a{' '}
-        <strong>case-insensitive substring</strong> match on the brand name in the assistant text
-        (aliases or pronouns do not count). Treat outputs as directional.
+        <strong>Limitations:</strong> Probes use OpenAI&apos;s <strong>web search</strong> model (
+        <span className="mono">gpt-4o-mini-search-preview</span>) — closer to search-style answers
+        but not identical to consumer ChatGPT. Visibility uses a{' '}
+        <strong>case-insensitive substring</strong> match on the brand name.{' '}
+        <strong>Sources</strong> are domains from search citation metadata (and any URLs in the
+        reply text). Treat outputs as directional.
       </div>
 
       <section className="panel">
@@ -236,23 +261,6 @@ function App() {
         </section>
       )}
 
-      {pilotDetail && pilotDetail.seed_domains.length > 0 && (
-        <section className="panel">
-          <h2>Illustrative domains (demo config)</h2>
-          <p className="seed-list" style={{ marginTop: 0 }}>
-            Shown for transparency when the model does not cite URLs. Not claimed as live citation
-            sources.
-          </p>
-          <ul className="seed-list">
-            {pilotDetail.seed_domains.map((d) => (
-              <li key={d} className="mono">
-                {d}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
       {run && (
         <>
           <section className="panel">
@@ -290,12 +298,20 @@ function App() {
 
           <section className="panel">
             <h2>4 · Query-level results</h2>
+            <p style={{ marginTop: 0, fontSize: '0.85rem', color: '#64748b' }}>
+              Domains from web-search citation metadata per probe. Teal = brand-owned (
+              {pilotDetail?.brand_domains?.length
+                ? pilotDetail.brand_domains.join(', ')
+                : 'heuristic'}
+              ). Higher cost than plain chat — see run total.
+            </p>
             <div style={{ overflowX: 'auto' }}>
               <table>
                 <thead>
                   <tr>
                     <th>Brand?</th>
                     <th>Query</th>
+                    <th>Sources (domains)</th>
                     <th>Competitors mentioned</th>
                     <th>Latency</th>
                     <th>Cost</th>
@@ -313,6 +329,9 @@ function App() {
                         <div className="mono" style={{ fontSize: '0.78rem' }}>
                           {q.query_text}
                         </div>
+                      </td>
+                      <td style={{ minWidth: '140px' }}>
+                        <CitedDomainChips cited={q.cited_domains} />
                       </td>
                       <td>
                         {q.competitors_mentioned
@@ -339,6 +358,9 @@ function App() {
                   {q.query_text.slice(0, 80)}
                   {q.query_text.length > 80 ? '…' : ''}
                 </summary>
+                <div style={{ margin: '0.5rem 0' }}>
+                  <CitedDomainChips cited={q.cited_domains} />
+                </div>
                 <pre
                   style={{
                     whiteSpace: 'pre-wrap',

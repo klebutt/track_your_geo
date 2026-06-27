@@ -8,7 +8,7 @@ Local prototype for **Track Your GEO**: YAML pilots, batch LLM probes via LiteLL
 
 ### Requirement: Pilot configuration
 
-The system MUST load pilot profiles from YAML in the configured directory. Each profile MUST include `id`, `brand_name`, `location`, `competitors`, and `queries` (templates with optional `{brand}` and `{location}` placeholders). Each profile MAY include `seed_domains` shown only as illustrative when citations are missing.
+The system MUST load pilot profiles from YAML in the configured directory. Each profile MUST include `id`, `brand_name`, `location`, `competitors`, and `queries` (templates with optional `{brand}` and `{location}` placeholders). Each profile MAY include `brand_domains` (explicit domains treated as brand-owned for citation classification). Each profile MAY include `seed_domains` for legacy compatibility; the dashboard MUST NOT present `seed_domains` as live citations from model replies.
 
 #### Scenario: Load pilots for the UI
 
@@ -17,12 +17,63 @@ The system MUST load pilot profiles from YAML in the configured directory. Each 
 
 ### Requirement: Simulated GEO probe
 
-The system MUST execute each query template against the configured model using LiteLLM and MUST persist assistant text per query on the run.
+The system MUST execute each query template against the configured model using LiteLLM and MUST persist assistant text per query on the run. Each `query_results` row MUST also persist `cited_domains` derived from that assistant text.
 
 #### Scenario: Run batch probes
 
 - **WHEN** the client calls `POST /api/runs` with a valid `pilot_id` and configured provider credentials
-- **THEN** the API creates a run that includes one stored result row per pilot query with model output text
+- **THEN** the API creates a run that includes one stored result row per pilot query with model output text and `cited_domains`
+
+### Requirement: Web search probes for citations
+
+GEO probes MUST use an OpenAI search-capable model (default `gpt-4o-mini-search-preview`) with `web_search_options` so replies include provider `url_citation` annotations. The system MUST NOT invent citation URLs outside model output.
+
+#### Scenario: Search model configured
+
+- **WHEN** the client starts a run with valid OpenAI credentials
+- **THEN** each probe uses the configured search probe model and records `probe_path: web_search` in usage metadata
+
+### Requirement: Citation domain extraction
+
+After each probe completes, the system MUST extract domains from `url_citation` annotations when present, and MAY supplement from HTTP(S) URLs or markdown links in `response_text`. The system MUST NOT invent domains not present in annotations or text.
+
+#### Scenario: Extract domains from URLs in reply
+
+- **WHEN** the assistant text contains `https://www.timeout.com/london/restaurants`
+- **THEN** the stored citation list for that query includes domain `timeout.com`
+
+#### Scenario: No domains in reply
+
+- **WHEN** the assistant text contains no parseable URLs or markdown links with hosts
+- **THEN** the stored citation list for that query is empty
+
+### Requirement: Brand-owned vs third-party classification
+
+Each extracted domain MUST be classified as `brand_owned` or `third_party`. The system MUST use pilot-configured `brand_domains` when provided. When `brand_domains` is empty, the system MAY classify a domain as `brand_owned` only when the normalized brand name slug (alphanumeric, length ≥ 4) appears in the domain label.
+
+#### Scenario: Explicit brand domain
+
+- **WHEN** the pilot lists `brand_domains: ["dishoom.com"]` and the reply cites `https://dishoom.com/menu`
+- **THEN** the citation entry for `dishoom.com` has `kind` `brand_owned`
+
+#### Scenario: Third-party domain
+
+- **WHEN** the reply cites `https://tripadvisor.com/...` and that domain is not in `brand_domains` and does not match the brand slug heuristic
+- **THEN** the citation entry has `kind` `third_party`
+
+### Requirement: Per-query citation display
+
+The web dashboard MUST show extracted domains for each query result. An empty citation list MUST be shown explicitly (e.g. “No domains cited”). The dashboard MUST distinguish brand-owned and third-party domains visually.
+
+#### Scenario: Per-query sources in results table
+
+- **WHEN** a user views query-level results after a completed run
+- **THEN** each row shows the domains cited in that query’s reply, or an explicit empty state
+
+#### Scenario: Citations disclaimer
+
+- **WHEN** citation domains are shown
+- **THEN** the UI includes copy that domains are parsed from this API path’s reply text and are not guaranteed to match consumer chat products
 
 ### Requirement: Consumer parity disclaimer
 
