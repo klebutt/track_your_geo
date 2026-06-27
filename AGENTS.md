@@ -61,7 +61,7 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 ## Current focus (update by humans)
 
-- **Active change:** _(none — `deploy-railway-vercel` complete; archive when ready)_
+- **Active change:** _(none)_
 - **Priorities (in order):**
   1. `multi-llm-citations` — add sonar-pro (Perplexity) + gemini-2.5-flash with citation extraction
   2. `structured-extraction` — replace substring match with LLM extraction call (unlocks full GEO score)

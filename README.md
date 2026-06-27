@@ -199,11 +199,11 @@ Production layout: **Vercel** serves the static React app; the browser calls **R
 | Variable | Where | Value |
 |----------|-------|-------|
 | `OPENAI_API_KEY` | Railway | Your OpenAI API key |
-| `TYGEO_ALLOWED_ORIGINS` | Railway | `https://<your-app>.vercel.app` (comma-separated if multiple) |
+| `TYGEO_ALLOWED_ORIGINS` | Railway | `https://track-your-geo.vercel.app` |
 | `TYGEO_DATABASE_URL` | Railway | `sqlite:////data/tygeo.db` |
 | `TYGEO_MODEL` | Railway | `gpt-4o-mini` (default) |
 | `TYGEO_PROBE_MODEL` | Railway | `gpt-4o-mini-search-preview` (default) |
-| `VITE_API_URL` | Vercel | `https://<your-app>.up.railway.app` |
+| `VITE_API_URL` | Vercel | `https://trackyourgeo-production.up.railway.app` |
 
 Locally, leave `VITE_API_URL` unset so the Vite dev proxy handles `/api` requests.
 
@@ -213,7 +213,7 @@ Locally, leave `VITE_API_URL` unset so the Vite dev proxy handles `/api` request
 2. Set **Root Directory** to `apps/api`.
 3. Add environment variables from the table above. For the first deploy, set `TYGEO_ALLOWED_ORIGINS=*` until you have the Vercel URL.
 4. Add a **Volume** mounted at `/data`.
-5. Confirm health: `GET https://<app>.up.railway.app/api/health` → `{"status":"ok"}`.
+5. Confirm health: `GET https://trackyourgeo-production.up.railway.app/api/health` → `{"status":"ok"}`.
 
 Config files: [`apps/api/railway.json`](apps/api/railway.json), [`apps/api/nixpacks.toml`](apps/api/nixpacks.toml).
 

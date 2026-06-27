@@ -139,9 +139,7 @@ Verified: https://track-your-geo.vercel.app/ loads (HTTP 200); bundle includes `
 3. Run a full end-to-end test: start a run from the Vercel URL, confirm it completes
 4. Update `README.md` with a `## Deployment` section (env vars table + Railway/Vercel steps)
 
-README deployment section added. End-to-end run verified via API (`POST /api/runs` → run #1, 10 queries, ~59s).
-
-**Action:** Set Railway `TYGEO_ALLOWED_ORIGINS=https://track-your-geo.vercel.app` and redeploy if the browser console shows CORS errors (API currently omits `Access-Control-Allow-Origin` for the Vercel origin).
+README deployment section added. End-to-end run verified via API (`POST /api/runs` → run #1, 10 queries, ~59s). CORS verified after setting `TYGEO_ALLOWED_ORIGINS=https://track-your-geo.vercel.app`.
 
 ---
 
@@ -157,5 +155,5 @@ Update `docs/worklog/2026-06-27.md` with the deploy URLs and any issues encounte
 - [x] Frontend loads at https://track-your-geo.vercel.app/
 - [x] Pilots list populates (3 demos via `GET /api/pilots`)
 - [x] Run completes end-to-end (run #1, Dishoom, 10 queries, visibility 30%)
-- [ ] No CORS errors in browser console — **set `TYGEO_ALLOWED_ORIGINS=https://track-your-geo.vercel.app` on Railway and redeploy**
-- [ ] SQLite data persists after Railway redeploy (run #1 should survive; confirm after next deploy)
+- [x] No CORS errors in browser console — `TYGEO_ALLOWED_ORIGINS=https://track-your-geo.vercel.app` set; API returns `Access-Control-Allow-Origin` for Vercel origin
+- [ ] SQLite data persists after Railway redeploy — run #1 from initial validation did not survive CORS redeploy (`GET /api/runs` empty). Confirm Railway **Volume** mounted at `/data` and `TYGEO_DATABASE_URL=sqlite:////data/tygeo.db`, then redeploy and re-test.
