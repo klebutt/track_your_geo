@@ -1,4 +1,4 @@
-# Track Your GEO — prototype
+# Track Your GEO —  prototype
 
 **Track Your GEO** helps brands see how often they appear when people ask AI assistants industry-style questions (for example, “best Indian restaurant in London”) — and how that compares to named competitors.
 
