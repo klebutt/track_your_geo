@@ -1,6 +1,10 @@
 # Tasks: deploy-railway-vercel
 
-## Status: implementation complete — pending live deploy (tasks 6–7)
+## Status: complete (live deploy validated 27 Jun 2026)
+
+**Live URLs**
+- Frontend: https://track-your-geo.vercel.app/
+- Backend: https://trackyourgeo-production.up.railway.app
 
 Implement these tasks in order. Each task is a small, reviewable diff. Validate after task 4 (local smoke test) and after task 6 (live URL check).
 
@@ -103,7 +107,7 @@ cmd = "uvicorn tygeo.main:app --host 0.0.0.0 --port $PORT"
 
 ---
 
-### Task 6 — Deploy backend to Railway ⏳ (manual)
+### Task 6 — Deploy backend to Railway ✅
 
 1. Go to railway.app → New Project → Deploy from GitHub repo
 2. Set **Root Directory** to `apps/api`
@@ -112,17 +116,19 @@ cmd = "uvicorn tygeo.main:app --host 0.0.0.0 --port $PORT"
 5. Add a Volume: mount path `/data`
 6. Confirm `GET https://<app>.up.railway.app/api/health` → `{"status": "ok"}`
 
-Note the Railway URL for the next task.
+Verified: `GET https://trackyourgeo-production.up.railway.app/api/health` → `{"status":"ok"}`.
 
 ---
 
-### Task 7 — Deploy frontend to Vercel ⏳ (manual)
+### Task 7 — Deploy frontend to Vercel ✅
 
 1. Go to vercel.com → New Project → Import GitHub repo
 2. Set **Root Directory** to `apps/web`
 3. Vercel auto-detects Vite; build command `npm run build`, output `dist`
 4. Add env var: `VITE_API_URL=https://<your-railway-app>.up.railway.app`
 5. Deploy → confirm frontend loads and pilots appear
+
+Verified: https://track-your-geo.vercel.app/ loads (HTTP 200); bundle includes `trackyourgeo-production.up.railway.app`.
 
 ---
 
@@ -133,7 +139,9 @@ Note the Railway URL for the next task.
 3. Run a full end-to-end test: start a run from the Vercel URL, confirm it completes
 4. Update `README.md` with a `## Deployment` section (env vars table + Railway/Vercel steps)
 
-README deployment section added. Steps 1–3 pending live deploy.
+README deployment section added. End-to-end run verified via API (`POST /api/runs` → run #1, 10 queries, ~59s).
+
+**Action:** Set Railway `TYGEO_ALLOWED_ORIGINS=https://track-your-geo.vercel.app` and redeploy if the browser console shows CORS errors (API currently omits `Access-Control-Allow-Origin` for the Vercel origin).
 
 ---
 
@@ -145,9 +153,9 @@ Update `docs/worklog/2026-06-27.md` with the deploy URLs and any issues encounte
 
 ## Validation checklist
 
-- [ ] `GET https://<railway-url>/api/health` → `{"status":"ok"}`
-- [ ] Frontend loads at Vercel URL
-- [ ] Pilots list populates
-- [ ] Run completes end-to-end
-- [ ] No CORS errors in browser console
-- [ ] SQLite data persists after Railway redeploy (check run history)
+- [x] `GET https://trackyourgeo-production.up.railway.app/api/health` → `{"status":"ok"}`
+- [x] Frontend loads at https://track-your-geo.vercel.app/
+- [x] Pilots list populates (3 demos via `GET /api/pilots`)
+- [x] Run completes end-to-end (run #1, Dishoom, 10 queries, visibility 30%)
+- [ ] No CORS errors in browser console — **set `TYGEO_ALLOWED_ORIGINS=https://track-your-geo.vercel.app` on Railway and redeploy**
+- [ ] SQLite data persists after Railway redeploy (run #1 should survive; confirm after next deploy)

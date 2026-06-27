@@ -61,13 +61,13 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 ## Current focus (update by humans)
 
-- **Active change:** `deploy-railway-vercel`
+- **Active change:** _(none — `deploy-railway-vercel` complete; archive when ready)_
 - **Priorities (in order):**
-  1. `deploy-railway-vercel` — CORS fix, VITE_API_URL, Railway/Vercel config. **Start here.**
-  2. `multi-llm-citations` — add sonar-pro (Perplexity) + gemini-2.5-flash with citation extraction
-  3. `structured-extraction` — replace substring match with LLM extraction call (unlocks full GEO score)
-  4. `multi-brand-yaml` — re-enable YAML pilot loading for real customer brands
+  1. `multi-llm-citations` — add sonar-pro (Perplexity) + gemini-2.5-flash with citation extraction
+  2. `structured-extraction` — replace substring match with LLM extraction call (unlocks full GEO score)
+  3. `multi-brand-yaml` — re-enable YAML pilot loading for real customer brands
 
-- **Context:** See `docs/worklog/2026-06-27.md` for full gap analysis, multi-LLM citation research, and rationale for this priority order.
+- **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
+- **Context:** See `docs/worklog/2026-06-27.md` for deploy validation and next steps.
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

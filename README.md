@@ -83,7 +83,9 @@ From [product_brief.md](product_brief.md):
 
 ## Try the demo
 
-You need a developer (or someone comfortable with a terminal) to start the app once per machine. After that, anyone can use the browser UI:
+**Live prototype:** [https://track-your-geo.vercel.app/](https://track-your-geo.vercel.app/)
+
+You need a developer (or someone comfortable with a terminal) to start the app once per machine for **local** use. After that, anyone can use the browser UI:
 
 1. Open the dashboard (usually `http://localhost:5173`).
 2. Choose a **demo brand** from the dropdown.
