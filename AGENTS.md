@@ -29,7 +29,7 @@ Track Your GEO: local MVP for GEO visibility probing. Agents collaborate with hu
 - [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) — scoring limits and improvement options; required for probe/score/UI work.
 - **Probes:** brand-neutral questions only (no brand name in prompt text).
 - **Score:** API + substring index; not consumer ChatGPT parity unless explicitly scoped.
-- **Demos:** [apps/api/tygeo/hardcoded_pilots.py](apps/api/tygeo/hardcoded_pilots.py).
+- **Demos:** YAML pilots under [apps/api/pilots/](apps/api/pilots/) (default `pilots/demo/`).
 - **Recommendations:** off for current build unless human re-enables via settings.
 
 ## OpenSpec
@@ -63,11 +63,9 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 - **Active change:** _(none)_
 - **Priorities (in order):**
-  1. `multi-llm-citations` — add sonar-pro (Perplexity) + gemini-2.5-flash with citation extraction
-  2. `structured-extraction` — replace substring match with LLM extraction call (unlocks full GEO score)
-  3. `multi-brand-yaml` — re-enable YAML pilot loading for real customer brands
+  1. `structured-extraction` — replace substring match with LLM extraction call (unlocks full GEO score)
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
-- **Context:** See `docs/worklog/2026-06-27.md` for deploy validation and next steps.
+- **Context:** See `docs/worklog/2026-06-28.md` for multi-LLM + YAML pilot validation.
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

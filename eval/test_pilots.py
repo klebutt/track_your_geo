@@ -7,8 +7,8 @@ import pytest
 from tygeo.config import Settings
 from tygeo.pilots import PilotProfile, list_pilots, load_pilot
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-PILOTS_DIR = REPO_ROOT / "pilots"
+API_ROOT = Path(__file__).resolve().parents[1] / "apps" / "api"
+PILOTS_DIR = API_ROOT / "pilots"
 
 
 def test_all_demo_pilots_load_and_have_queries():
@@ -37,6 +37,7 @@ def test_settings_default_pilot_dir(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("TYGEO_PILOT_DIR", raising=False)
     settings = Settings(_env_file=None)
     assert settings.tygeo_pilot_dir == "pilots"
+    assert settings.pilot_dir_path == (API_ROOT / "pilots").resolve()
 
 
 def test_temporary_yaml_appears_in_list(tmp_path: Path):

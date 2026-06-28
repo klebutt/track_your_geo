@@ -13,29 +13,60 @@ The system MUST load pilot profiles from YAML in the configured directory. Each 
 #### Scenario: Load pilots for the UI
 
 - **WHEN** the API receives `GET /api/pilots`
-- **THEN** it returns one entry per valid YAML file with id, brand, location, and query count
+- **THEN** it returns one entry per valid YAML file discovered recursively under the configured pilot directory with id, brand, location, and query count
+
+#### Scenario: Skip malformed pilot files
+
+- **WHEN** a YAML file under the pilot directory fails validation
+- **THEN** the API logs a warning and continues listing other pilots without failing the request
 
 ### Requirement: Simulated GEO probe
 
-The system MUST execute each query template against the configured model using LiteLLM and MUST persist assistant text per query on the run. Each `query_results` row MUST also persist `cited_domains` derived from that assistant text.
+The system MUST execute each query template against every model in `TYGEO_ENABLED_PROBES` using LiteLLM and MUST persist assistant text per query on the run. Each `query_results` row MUST also persist `cited_domains` derived from provider-specific citation metadata and `model_name` identifying which probe model produced the row.
 
 #### Scenario: Run batch probes
 
 - **WHEN** the client calls `POST /api/runs` with a valid `pilot_id` and configured provider credentials
-- **THEN** the API creates a run that includes one stored result row per pilot query with model output text and `cited_domains`
+- **THEN** the API creates a run that includes one stored result row per pilot query **per enabled probe model** with model output text, `model_name`, and `cited_domains`
 
-### Requirement: Web search probes for citations
+### Requirement: Multi-provider GEO probes
 
-GEO probes MUST use an OpenAI search-capable model (default `gpt-4o-mini-search-preview`) with `web_search_options` so replies include provider `url_citation` annotations. The system MUST NOT invent citation URLs outside model output.
+GEO probes MUST fan out sequentially across the comma-separated models in `TYGEO_ENABLED_PROBES` (default: `gpt-4o-mini-search-preview`). The system MUST support:
 
-#### Scenario: Search model configured
+- **OpenAI search models** — `web_search_options` with `url_citation` annotations
+- **Perplexity** (`perplexity/sonar-pro`) — top-level `citations` URL array
+- **Gemini** (`gemini/gemini-2.5-flash`) — `googleSearch` tool with grounding metadata
 
-- **WHEN** the client starts a run with valid OpenAI credentials
-- **THEN** each probe uses the configured search probe model and records `probe_path: web_search` in usage metadata
+Provider API keys MUST be read from `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, and `GEMINI_API_KEY` respectively. The system MUST NOT invent citation URLs outside model output.
+
+#### Scenario: Multi-model run metadata
+
+- **WHEN** the client starts a run with three models enabled
+- **THEN** each probe records `model_name` on its `query_results` row and the run's `model_name` lists all models used
+
+#### Scenario: OpenAI search model configured
+
+- **WHEN** the client starts a run with an OpenAI search model enabled
+- **THEN** each OpenAI probe uses `web_search_options` and records `probe_path: web_search` in usage metadata
+
+#### Scenario: Perplexity citations
+
+- **WHEN** a Perplexity probe returns a `citations` array
+- **THEN** cited domains are extracted from those URLs before falling back to reply text parsing
+
+### Requirement: Web search probes for citations (OpenAI path)
+
+OpenAI GEO probes MUST use a search-capable model (default `gpt-4o-mini-search-preview`) with `web_search_options` so replies include provider `url_citation` annotations.
 
 ### Requirement: Citation domain extraction
 
-After each probe completes, the system MUST extract domains from `url_citation` annotations when present, and MAY supplement from HTTP(S) URLs or markdown links in `response_text`. The system MUST NOT invent domains not present in annotations or text.
+After each probe completes, the system MUST extract domains from provider-grounded metadata when present:
+
+- OpenAI: `url_citation` annotations
+- Perplexity: `citations` URL list (and `search_results` fallback)
+- Gemini: grounding chunks / annotations mapped by LiteLLM
+
+The system MAY supplement from HTTP(S) URLs or markdown links in `response_text`. The system MUST NOT invent domains not present in annotations, citation arrays, or text.
 
 #### Scenario: Extract domains from URLs in reply
 
@@ -63,7 +94,7 @@ Each extracted domain MUST be classified as `brand_owned` or `third_party`. The 
 
 ### Requirement: Per-query citation display
 
-The web dashboard MUST show extracted domains for each query result. An empty citation list MUST be shown explicitly (e.g. “No domains cited”). The dashboard MUST distinguish brand-owned and third-party domains visually.
+The web dashboard MUST show extracted domains and `model_name` for each query result. An empty citation list MUST be shown explicitly (e.g. “No domains cited”). The dashboard MUST distinguish brand-owned and third-party domains visually.
 
 #### Scenario: Per-query sources in results table
 
@@ -86,7 +117,7 @@ The product MUST communicate that API completions are not identical to consumer 
 
 ### Requirement: Visibility and competitor signals
 
-The system MUST compute visibility rate as the fraction of queries where the brand name appears as a case-insensitive substring in the assistant text. The system MUST store per-competitor boolean mention flags for each query.
+The system MUST compute visibility rate as the fraction of stored probe responses (across all enabled models) where the brand name appears as a case-insensitive substring in the assistant text. The system MUST store per-competitor boolean mention flags for each query.
 
 #### Scenario: Mark brand presence
 

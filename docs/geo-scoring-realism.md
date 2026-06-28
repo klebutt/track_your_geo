@@ -90,6 +90,6 @@ Pick one direction and make it explicit in product copy and specs:
 
 ## Related code in this repo
 
-- Probe text: `apps/api/tygeo/hardcoded_pilots.py` (brand-neutral templates only).
+- Probe text: `apps/api/pilots/` YAML templates (brand-neutral queries only).
 - Mention logic: `apps/api/tygeo/analysis.py` (`_mentions`, `analyze_response`).
-- Execution: `apps/api/tygeo/analysis.py` (`execute_run`), LLM calls in `apps/api/tygeo/llm.py`.
+- Execution: `apps/api/tygeo/analysis.py` (`execute_run`), multi-model LLM calls in `apps/api/tygeo/llm.py`.

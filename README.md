@@ -42,7 +42,7 @@ flowchart LR
 When someone clicks **Run analysis** in the dashboard:
 
 1. The tool loads the demo brand’s question set and competitor list.
-2. For each **neutral** question, it asks a configured **AI model** (via API).
+2. For each **neutral** question, it asks every model in `TYGEO_ENABLED_PROBES` (default: OpenAI search, Perplexity sonar-pro, Gemini 2.5 Flash).
 3. It records each answer and checks whether the brand name and competitor names appear in the text.
 4. It calculates **visibility** = the share of answers that mention your brand.
 5. The dashboard shows the score, each question/answer pair, and competitor hits.
@@ -91,9 +91,9 @@ You need a developer (or someone comfortable with a terminal) to start the app o
 2. Choose a **demo brand** from the dropdown.
 3. Click **Run analysis** and review visibility, each Q&A, and competitors.
 
-Built-in demos are defined in code ([`hardcoded_pilots.py`](apps/api/tygeo/hardcoded_pilots.py)) — **Dishoom** (London), **Clio** (UK legal tech), and **SDL Surveying** (UK residential surveys). Setup steps are under [For developers](#for-developers) below.
+Built-in demos live as YAML under [`apps/api/pilots/demo/`](apps/api/pilots/demo/) — **Dishoom** (London), **Clio** (UK legal tech), and **SDL Surveying** (UK residential surveys). Add a brand by dropping a `.yaml` file under `apps/api/pilots/` (no code change). Setup steps are under [For developers](#for-developers) below.
 
-Each run uses your **OpenAI API key** (or another configured provider) and incurs a small per-question cost; the UI shows approximate spend for the run.
+Each run uses your configured provider API keys and incurs per-query cost across all enabled probe models; the UI shows approximate spend for the run.
 
 ## Learn more
 
@@ -107,13 +107,13 @@ Each run uses your **OpenAI API key** (or another configured provider) and incur
 
 ## For developers
 
-Local-only stack: **FastAPI** API + **Vite/React** UI. Demo brands are hardcoded in [`apps/api/tygeo/hardcoded_pilots.py`](apps/api/tygeo/hardcoded_pilots.py). Human–agent workflow (orient, plan, approve, validate, worklog): [AGENTS.md](AGENTS.md).
+Local-only stack: **FastAPI** API + **Vite/React** UI. Demo brands load from YAML in [`apps/api/pilots/`](apps/api/pilots/). Human–agent workflow (orient, plan, approve, validate, worklog): [AGENTS.md](AGENTS.md).
 
 ### Prerequisites
 
 - **Python 3.11+** (3.12+ recommended)
 - **Node.js 20+** for the web UI and OpenSpec CLI (OpenSpec officially wants Node 20.19+)
-- An **OpenAI API key** (or configure another provider supported by LiteLLM in code)
+- An **OpenAI API key** (required). Optional: **Perplexity** and **Gemini** keys for multi-model probes.
 
 ### Quick start (Windows)
 
@@ -131,7 +131,7 @@ python -m venv tygeo-venv
 
 ```powershell
 Copy-Item .env.example .env
-# Edit .env: set OPENAI_API_KEY; probes use TYGEO_PROBE_MODEL (default gpt-4o-mini-search-preview)
+# Edit .env: set OPENAI_API_KEY; optional PERPLEXITY_API_KEY, GEMINI_API_KEY, TYGEO_ENABLED_PROBES
 ```
 
 3. Start the API (terminal A), from repo root:
@@ -158,9 +158,9 @@ If the web UI shows proxy errors right after startup, wait a few seconds for the
 
 | Path | Purpose |
 |------|---------|
-| [apps/api/tygeo/](apps/api/tygeo/) | FastAPI app, LiteLLM calls, SQLite persistence; built-in demo brands live in [`hardcoded_pilots.py`](apps/api/tygeo/hardcoded_pilots.py) |
+| [apps/api/tygeo/](apps/api/tygeo/) | FastAPI app, LiteLLM calls, SQLite persistence |
+| [apps/api/pilots/](apps/api/pilots/) | YAML pilot profiles (demo brands + future customers) |
 | [apps/web/](apps/web/) | Vite + React dashboard |
-| [pilot/](pilot/) | Optional folder for future YAML pilots; the prototype **does not** read YAML from here today |
 | [openspec/](openspec/) | OpenSpec specs and change proposals |
 | [eval/](eval/) | Pytest + DeepEval checks |
 | [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) | Limits of the prototype score vs real assistant search; ways to improve fidelity |
@@ -199,10 +199,14 @@ Production layout: **Vercel** serves the static React app; the browser calls **R
 | Variable | Where | Value |
 |----------|-------|-------|
 | `OPENAI_API_KEY` | Railway | Your OpenAI API key |
+| `PERPLEXITY_API_KEY` | Railway | Perplexity API key (for `perplexity/sonar-pro`) |
+| `GEMINI_API_KEY` | Railway | Google AI Studio key (for `gemini/gemini-2.5-flash`) |
+| `TYGEO_ENABLED_PROBES` | Railway | `gpt-4o-mini-search-preview,perplexity/sonar-pro,gemini/gemini-2.5-flash` |
+| `TYGEO_PILOT_DIR` | Railway | `pilots` (relative to `apps/api`; ships with the repo) |
 | `TYGEO_ALLOWED_ORIGINS` | Railway | `https://track-your-geo.vercel.app` |
 | `TYGEO_DATABASE_URL` | Railway | `sqlite:////data/tygeo.db` |
 | `TYGEO_MODEL` | Railway | `gpt-4o-mini` (default) |
-| `TYGEO_PROBE_MODEL` | Railway | `gpt-4o-mini-search-preview` (default) |
+| `TYGEO_PROBE_MODEL` | Railway | `gpt-4o-mini-search-preview` (legacy single-model fallback) |
 | `VITE_API_URL` | Vercel | `https://trackyourgeo-production.up.railway.app` |
 
 Locally, leave `VITE_API_URL` unset so the Vite dev proxy handles `/api` requests.

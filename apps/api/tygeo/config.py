@@ -2,6 +2,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_API_ROOT = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -28,4 +30,7 @@ class Settings(BaseSettings):
 
     @property
     def pilot_dir_path(self) -> Path:
-        return Path(self.tygeo_pilot_dir).resolve()
+        p = Path(self.tygeo_pilot_dir)
+        if p.is_absolute():
+            return p
+        return (_API_ROOT / p).resolve()
