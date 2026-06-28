@@ -73,6 +73,7 @@ type Run = {
   composite_score: number
   query_results: QueryResult[]
   recommendations: Recommendation[]
+  usage_log?: Array<{ phase?: string; model?: string; error?: string }> | null
 }
 
 function formatProbeTemplate(template: string, brand: string, location: string): string {
@@ -172,6 +173,11 @@ function App() {
     const loc = location.trim() || pilotDetail.location
     return pilotDetail.queries.map((t) => formatProbeTemplate(t, b, loc))
   }, [pilotDetail, brand, location])
+
+  const probeErrors = useMemo(
+    () => (run?.usage_log ?? []).filter((e) => e.phase === 'probe_error'),
+    [run],
+  )
 
   const onRun = async () => {
     setRunning(true)
@@ -326,6 +332,15 @@ function App() {
               Visibility = fraction of probes where the assistant text contained &quot;
               {run.brand_name}&quot; (substring). Tokens: {run.total_prompt_tokens} prompt +{' '}
               {run.total_completion_tokens} completion.
+              {probeErrors.length > 0 && (
+                <>
+                  {' '}
+                  <strong style={{ color: '#b45309' }}>
+                    {probeErrors.length} probe(s) failed
+                  </strong>{' '}
+                  (often Gemini quota or a missing key) — results below are partial.
+                </>
+              )}
             </p>
           </section>
 

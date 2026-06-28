@@ -11,6 +11,30 @@ from litellm import completion_cost
 from tygeo.config import Settings
 
 
+def _parse_cost_usd(raw: object) -> float:
+    """Normalize LiteLLM completion_cost output (float or cost breakdown dict)."""
+    if raw is None:
+        return 0.0
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if isinstance(raw, dict):
+        for key in ("total_cost", "cost", "total"):
+            if key in raw:
+                return _parse_cost_usd(raw[key])
+        return 0.0
+    try:
+        return float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _completion_cost_usd(response: Any) -> float:
+    try:
+        return _parse_cost_usd(completion_cost(completion_response=response))
+    except Exception:
+        return 0.0
+
+
 def _extract_json_array(text: str) -> list[dict[str, Any]]:
     text = text.strip()
     try:
@@ -65,10 +89,7 @@ def complete(
     text = choice.message.content or ""
     pt, ct = _usage_tokens(response)
 
-    try:
-        cost = float(completion_cost(completion_response=response))
-    except Exception:
-        cost = 0.0
+    cost = _completion_cost_usd(response)
 
     meta = {
         "model": settings.tygeo_model,
@@ -108,10 +129,7 @@ def _probe_messages(user_prompt: str) -> list[dict[str, str]]:
 def _completion_meta(response: Any, *, model: str, probe_path: str, t0: float) -> dict[str, Any]:
     latency_ms = (time.perf_counter() - t0) * 1000
     pt, ct = _usage_tokens(response)
-    try:
-        cost = float(completion_cost(completion_response=response))
-    except Exception:
-        cost = 0.0
+    cost = _completion_cost_usd(response)
     return {
         "model": model,
         "probe_path": probe_path,
