@@ -42,10 +42,12 @@ flowchart LR
 When someone clicks **Run analysis** in the dashboard:
 
 1. The tool loads the demo brand’s question set and competitor list.
-2. For each **neutral** question, it asks every model in `TYGEO_ENABLED_PROBES` (default: OpenAI search, Perplexity sonar-pro, Gemini 2.5 Flash).
-3. It records each answer and checks whether the brand name and competitor names appear in the text.
-4. It calculates **visibility** = the share of answers that mention your brand.
-5. The dashboard shows the score, each question/answer pair, and competitor hits.
+2. The API **starts the run immediately** and returns `status: running` (probes continue in the background — a full demo pilot takes **~4–8 minutes** with three models).
+3. The UI **polls every few seconds** and shows probe progress (`N complete`).
+4. For each **neutral** question, every model in `TYGEO_ENABLED_PROBES` is called (default: OpenAI search, Perplexity sonar-pro, Gemini 2.5 Flash).
+5. It records each answer and checks whether the brand name and competitor names appear in the text.
+6. If an individual model fails (e.g. Gemini free-tier quota), other models still run; the summary notes partial results.
+7. The dashboard shows the score, each question/answer pair (with **model name**), and competitor hits.
 
 ```mermaid
 sequenceDiagram
@@ -91,9 +93,9 @@ You need a developer (or someone comfortable with a terminal) to start the app o
 2. Choose a **demo brand** from the dropdown.
 3. Click **Run analysis** and review visibility, each Q&A, and competitors.
 
-Built-in demos live as YAML under [`apps/api/pilots/demo/`](apps/api/pilots/demo/) — **Dishoom** (London), **Clio** (UK legal tech), and **SDL Surveying** (UK residential surveys). Add a brand by dropping a `.yaml` file under `apps/api/pilots/` (no code change). Setup steps are under [For developers](#for-developers) below.
+Built-in demos live as YAML under [`apps/api/pilots/demo/`](apps/api/pilots/demo/) — **Dishoom** (London), **Clio** (UK legal tech), and **SDL Surveying** (UK residential surveys). Add a brand by dropping a `.yaml` file under [`apps/api/pilots/`](apps/api/pilots/) (no code change). Setup steps are under [For developers](#for-developers) below.
 
-Each run uses your configured provider API keys and incurs per-query cost across all enabled probe models; the UI shows approximate spend for the run.
+Each run uses your configured provider API keys and incurs per-query cost across all enabled probe models; the UI shows approximate spend for the run. A full demo pilot with three models is **30 API calls** (10 queries × 3 models).
 
 ## Learn more
 
@@ -211,6 +213,15 @@ Production layout: **Vercel** serves the static React app; the browser calls **R
 
 Locally, leave `VITE_API_URL` unset so the Vite dev proxy handles `/api` requests.
 
+### Multi-model probes and Gemini quota
+
+With all three default models enabled, each demo pilot issues **30 sequential probes**. The UI polls until the run completes — do not close the tab during a run.
+
+**Gemini free tier** (`gemini-2.5-flash` via Google AI Studio) has low per-minute request limits. On production we routinely see **partial runs**: OpenAI and Perplexity succeed; Gemini rows missing with `probe_error` in `usage_log`. Options:
+
+- Enable **paid Gemini billing** when ready for full 3-model coverage.
+- Temporarily set `TYGEO_ENABLED_PROBES=gpt-4o-mini-search-preview,perplexity/sonar-pro` on Railway.
+
 ### Railway (backend)
 
 1. [railway.app](https://railway.app) → **New Project** → Deploy from GitHub.
@@ -219,7 +230,7 @@ Locally, leave `VITE_API_URL` unset so the Vite dev proxy handles `/api` request
 4. Add a **Volume** mounted at `/data`.
 5. Confirm health: `GET https://trackyourgeo-production.up.railway.app/api/health` → `{"status":"ok"}`.
 
-Config files: [`apps/api/railway.json`](apps/api/railway.json), [`apps/api/nixpacks.toml`](apps/api/nixpacks.toml).
+Config: [`apps/api/railway.json`](apps/api/railway.json).
 
 ### Vercel (frontend)
 

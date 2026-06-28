@@ -91,5 +91,6 @@ Pick one direction and make it explicit in product copy and specs:
 ## Related code in this repo
 
 - Probe text: `apps/api/pilots/` YAML templates (brand-neutral queries only).
-- Mention logic: `apps/api/tygeo/analysis.py` (`_mentions`, `analyze_response`).
-- Execution: `apps/api/tygeo/analysis.py` (`execute_run`), multi-model LLM calls in `apps/api/tygeo/llm.py`.
+- Mention logic: `apps/api/tygeo/analysis.py` (`_mentions`, `analyze_response`) — substring match today; **structured extraction** is the planned upgrade.
+- Execution: `apps/api/tygeo/analysis.py` (`execute_run`, background `finish_run_probes`), multi-model LLM in `apps/api/tygeo/llm.py`.
+- Runs are **async**: UI polls `GET /api/runs/{id}`; per-model failures can yield partial results (common for Gemini free tier).

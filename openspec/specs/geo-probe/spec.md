@@ -27,7 +27,20 @@ The system MUST execute each query template against every model in `TYGEO_ENABLE
 #### Scenario: Run batch probes
 
 - **WHEN** the client calls `POST /api/runs` with a valid `pilot_id` and configured provider credentials
-- **THEN** the API creates a run that includes one stored result row per pilot query **per enabled probe model** with model output text, `model_name`, and `cited_domains`
+- **THEN** the API returns immediately with `status: running` and begins probes in a background task
+- **AND** the client polls `GET /api/runs/{id}` until `status` is `completed` or `failed`
+
+#### Scenario: Incremental probe persistence
+
+- **WHEN** a background probe completes successfully
+- **THEN** a `query_results` row is committed before the next probe starts so polling clients see growing progress
+
+#### Scenario: Partial run on model failure
+
+- **WHEN** an individual probe fails (e.g. provider rate limit or missing API key)
+- **THEN** the failure is recorded in `usage_log` with `phase: probe_error`
+- **AND** other probes continue
+- **AND** the run completes with `status: completed` if at least one probe succeeded
 
 ### Requirement: Multi-provider GEO probes
 
@@ -135,7 +148,7 @@ After probes complete, the system MUST call the LLM for a JSON array of recommen
 
 ### Requirement: Cost observability
 
-The system MUST aggregate per-call token counts and LiteLLM-reported costs for each run and MUST expose totals on the run payload.
+The system MUST aggregate per-call token counts and LiteLLM-reported costs for each run and MUST expose totals on the run payload. LiteLLM MAY return cost as a float or a breakdown dict; the system MUST normalize to a single USD float per probe.
 
 #### Scenario: Show run cost
 

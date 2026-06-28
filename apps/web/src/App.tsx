@@ -222,12 +222,12 @@ function App() {
       </header>
 
       <div className="disclaimer">
-        <strong>Limitations:</strong> Probes use OpenAI&apos;s <strong>web search</strong> model (
-        <span className="mono">gpt-4o-mini-search-preview</span>) — closer to search-style answers
-        but not identical to consumer ChatGPT. Visibility uses a{' '}
-        <strong>case-insensitive substring</strong> match on the brand name.{' '}
-        <strong>Sources</strong> are domains from search citation metadata (and any URLs in the
-        reply text). Treat outputs as directional.
+        <strong>Limitations:</strong> Probes fan out to configured models (default: OpenAI search,{' '}
+        Perplexity sonar-pro, Gemini 2.5 Flash) — API paths, not consumer chat UIs. Visibility uses
+        a <strong>case-insensitive substring</strong> match on the brand name.{' '}
+        <strong>Sources</strong> are domains from provider citation metadata (and URLs in reply
+        text). Gemini free tier may rate-limit; partial results are possible. Treat outputs as
+        directional.
       </div>
 
       <section className="panel">
