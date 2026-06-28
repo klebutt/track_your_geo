@@ -111,10 +111,16 @@ def api_create_run(
 
 
 @app.get("/api/runs", response_model=list[RunListItem])
-def api_list_runs(limit: int = 20, db: Session = Depends(db_session)):
+def api_list_runs(
+    pilot_id: str | None = None,
+    limit: int = 20,
+    db: Session = Depends(db_session),
+):
+    query = db.query(Run)
+    if pilot_id:
+        query = query.filter(Run.pilot_id == pilot_id)
     rows = (
-        db.query(Run)
-        .order_by(Run.created_at.desc())
+        query.order_by(Run.created_at.desc())
         .limit(min(max(limit, 1), 100))
         .all()
     )

@@ -85,6 +85,7 @@ class RunListItem(BaseModel):
     created_at: datetime
     pilot_id: str
     brand_name: str
+    status: str
     visibility_rate: float
     total_cost_usd: float
 

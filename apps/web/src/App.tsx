@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { TrendChart, type TrendPoint } from './TrendChart'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -56,6 +57,16 @@ type Recommendation = {
   detail: string
   impact: string
   category: string
+}
+
+type RunListItem = {
+  id: number
+  created_at: string
+  pilot_id: string
+  brand_name: string
+  status: string
+  visibility_rate: number
+  total_cost_usd: number
 }
 
 type Run = {
@@ -123,6 +134,42 @@ function App() {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [run, setRun] = useState<Run | null>(null)
+  const [runHistory, setRunHistory] = useState<RunListItem[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+
+  const loadRunHistory = useCallback(
+    async (id: string, options?: { setActiveRun?: boolean }) => {
+      if (!id) {
+        setRunHistory([])
+        if (options?.setActiveRun) setRun(null)
+        return
+      }
+      setLoadingHistory(true)
+      try {
+        const list = await fetchJson<RunListItem[]>(
+          `${API_BASE}/api/runs?pilot_id=${encodeURIComponent(id)}&limit=20`,
+        )
+        const completed = list.filter((r) => r.status === 'completed')
+        setRunHistory(completed)
+        if (options?.setActiveRun) {
+          const latest = completed[0]
+          if (latest) {
+            const full = await fetchJson<Run>(`${API_BASE}/api/runs/${latest.id}`)
+            setRun(full)
+          } else {
+            setRun(null)
+          }
+        }
+      } catch (e) {
+        if (options?.setActiveRun) setRun(null)
+        setRunHistory([])
+        setError(e instanceof Error ? e.message : 'Failed to load run history')
+      } finally {
+        setLoadingHistory(false)
+      }
+    },
+    [],
+  )
 
   const loadPilots = useCallback(async () => {
     setLoadingPilots(true)
@@ -167,6 +214,21 @@ function App() {
     }
   }, [pilotId])
 
+  useEffect(() => {
+    if (!pilotId || running) return
+    void loadRunHistory(pilotId, { setActiveRun: true })
+  }, [pilotId, running, loadRunHistory])
+
+  const trendData = useMemo<TrendPoint[]>(
+    () =>
+      runHistory.map((r) => ({
+        runId: r.id,
+        date: r.created_at,
+        visibilityPct: r.visibility_rate * 100,
+      })),
+    [runHistory],
+  )
+
   const resolvedProbes = useMemo(() => {
     if (!pilotDetail) return []
     const b = brand.trim() || pilotDetail.brand_name
@@ -201,6 +263,7 @@ function App() {
         const completed = await pollUntilRunComplete(API_BASE, started.id, setRun)
         setRun(completed)
       }
+      await loadRunHistory(pilotId)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Run failed')
     } finally {
@@ -303,7 +366,16 @@ function App() {
       {run && (
         <>
           <section className="panel">
-            <h2>3 · Summary</h2>
+            <h2>3 · Visibility trend</h2>
+            <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem', maxWidth: '65ch' }}>
+              Historical visibility rate across completed runs for this brand
+              {loadingHistory ? ' (loading…)' : ''}.
+            </p>
+            <TrendChart data={trendData} />
+          </section>
+
+          <section className="panel">
+            <h2>4 · Summary</h2>
             <div className="stats">
               <div className="stat">
                 <div className="k">Visibility rate</div>
@@ -345,7 +417,7 @@ function App() {
           </section>
 
           <section className="panel">
-            <h2>4 · Query-level results</h2>
+            <h2>5 · Query-level results</h2>
             <p style={{ marginTop: 0, fontSize: '0.85rem', color: '#64748b' }}>
               Domains from web-search citation metadata per probe. Teal = brand-owned (
               {pilotDetail?.brand_domains?.length
@@ -403,7 +475,7 @@ function App() {
           </section>
 
           <section className="panel">
-            <h2>5 · Full model replies</h2>
+            <h2>6 · Full model replies</h2>
             {run.query_results.map((q) => (
               <details key={`ex-${q.id}`} style={{ marginBottom: '0.75rem' }}>
                 <summary className="mono" style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
