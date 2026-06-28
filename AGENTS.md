@@ -30,7 +30,7 @@ Track Your GEO: local MVP for GEO visibility probing. Agents collaborate with hu
 - **Probes:** brand-neutral questions only (no brand name in prompt text).
 - **Score:** Substring visibility gate + LLM extraction (sentiment, position) for composite GEO score; not consumer ChatGPT parity unless explicitly scoped.
 - **Demos:** YAML pilots under [apps/api/pilots/](apps/api/pilots/) (default `pilots/demo/`).
-- **Recommendations:** off for current build unless human re-enables via settings.
+- **Recommendations:** Enabled after each run — enriched LLM call using sentiment, position, citation gaps, and competitor signals (~$0.005/run). See §4 **Insights & optimization** in the dashboard.
 
 ## OpenSpec
 
@@ -67,6 +67,6 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
   1. Calibration panel vs consumer ChatGPT (see [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md))
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
-- **Context:** See [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md) — multi-LLM, YAML pilots, async runs, dashboard history, **structured extraction** (sentiment + position columns, weighted composite score) verified in prod.
+- **Context:** See [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md) — multi-LLM, YAML pilots, async runs, dashboard history, structured extraction, **recommendations engine v1** (insights section + enriched advice) verified in prod.
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

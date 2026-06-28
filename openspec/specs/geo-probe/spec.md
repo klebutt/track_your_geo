@@ -174,12 +174,36 @@ The web dashboard MUST show **Sentiment** and **Position** for each query result
 
 ### Requirement: Recommendations
 
-After probes complete, the system MUST call the LLM for a JSON array of recommendations and MUST persist title, detail, impact, and category linked to the run.
+After probes complete, the system MUST call the LLM for a JSON array of recommendations enriched with run-level signals (sentiment summary, average position, citation gaps, weak queries, and competitor wins) and MUST persist title, detail, impact, and category linked to the run. Categories MUST include at least `website`, `third_party`, `pr_comms`, and `technical`. Recommendation failures MUST NOT fail the overall run; errors MUST be recorded in `usage_log` as `recommendations_error`.
 
 #### Scenario: Persist structured actions
 
-- **WHEN** a run completes probing
-- **THEN** the API stores at least one recommendation row when the model returns parsable JSON items
+- **WHEN** a run completes probing and the recommendations model returns parsable JSON items
+- **THEN** the API stores at least one recommendation row linked to the run
+
+#### Scenario: Enriched recommendation context
+
+- **WHEN** the recommendations LLM is invoked
+- **THEN** the prompt includes visibility rate, composite score, sentiment breakdown, average position, citation gaps, weak queries, and top competitors from the completed probe batch
+
+#### Scenario: Recommendations survive re-fetch
+
+- **WHEN** the client calls `GET /api/runs/{id}` for a completed run with stored recommendations
+- **THEN** the response includes the `recommendations` array without re-invoking the LLM
+
+### Requirement: Insights and optimization dashboard
+
+The web dashboard MUST display an **Insights & optimization** section for a loaded completed run, positioned after the visibility trend chart and before the neutral probes list. The section MUST include a visual breakdown of the composite GEO score weights (40% visibility, 30% position, 20% sentiment, 10% citations) and MUST render recommendation cards with impact and category when recommendations exist.
+
+#### Scenario: Score breakdown visible
+
+- **WHEN** a user views a completed run with query results
+- **THEN** the dashboard shows the composite score and component weight explanation
+
+#### Scenario: Recommendation cards
+
+- **WHEN** a completed run has stored recommendations
+- **THEN** the dashboard displays each recommendation with title, detail, impact badge, and category label
 
 ### Requirement: Cost observability
 

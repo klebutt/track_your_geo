@@ -1,6 +1,6 @@
 # GEO scoring: how close are we to “real” ChatGPT search?
 
-The prototype measures **simulated** visibility: neutral user-style questions, answers from **configured LLM APIs** (via LiteLLM, multi-model by default), a **case-insensitive substring** gate for brand visibility, and — when the brand appears — a **structured extraction** call (`gpt-4o-mini`, JSON mode) for sentiment, mention position, and relevance. The run **composite score** blends visibility, position, sentiment, and citation volume (see [apps/api/docs/geo-scoring-formula.md](../apps/api/docs/geo-scoring-formula.md)).
+The prototype measures **simulated** visibility: neutral user-style questions, answers from **configured LLM APIs** (via LiteLLM, multi-model by default), a **case-insensitive substring** gate for brand visibility, and — when the brand appears — a **structured extraction** call (`gpt-4o-mini`, JSON mode) for sentiment, mention position, and relevance. The run **composite score** blends visibility, position, sentiment, and citation volume (see [apps/api/docs/geo-scoring-formula.md](../apps/api/docs/geo-scoring-formula.md)). A post-run **recommendations** call turns those signals into prioritized optimization actions in the dashboard.
 
 That stack is useful for **trends and comparisons** inside the product, but it is **not** the same as what any given user sees in **consumer ChatGPT** (or other assistants) when they use **search-like** behaviour.
 
