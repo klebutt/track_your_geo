@@ -91,6 +91,13 @@ function formatProbeTemplate(template: string, brand: string, location: string):
   return template.replaceAll('{brand}', brand).replaceAll('{location}', location)
 }
 
+function formatRunDateTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
   if (!res.ok) {
@@ -337,45 +344,13 @@ function App() {
         {error && <div className="error mono">{error}</div>}
       </section>
 
-      {pilotDetail && resolvedProbes.length > 0 && (
-        <section className="panel">
-          <h2>2 · Neutral GEO probes for this scenario</h2>
-          <p style={{ marginTop: 0, color: '#64748b', maxWidth: '65ch' }}>
-            These are the exact questions sent for the next run (with your brand and location
-            substituted where <span className="mono">{'{location}'}</span> appears). None of them
-            include the tracked brand name in the prompt.
-          </p>
-          {pilotDetail.competitors.length > 0 && (
-            <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: 0 }}>
-              Competitor substring checks:{' '}
-              <span className="mono">{pilotDetail.competitors.join(', ')}</span>
-            </p>
-          )}
-          <ol className="probe-list" style={{ marginBottom: 0 }}>
-            {resolvedProbes.map((q) => (
-              <li key={q} style={{ marginBottom: '0.5rem' }}>
-                <span className="mono" style={{ fontSize: '0.82rem' }}>
-                  {q}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
       {run && (
         <>
           <section className="panel">
-            <h2>3 · Visibility trend</h2>
-            <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem', maxWidth: '65ch' }}>
-              Historical visibility rate across completed runs for this brand
-              {loadingHistory ? ' (loading…)' : ''}.
+            <h2>2 · Summary</h2>
+            <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem' }}>
+              Last probe: <time dateTime={run.created_at}>{formatRunDateTime(run.created_at)}</time>
             </p>
-            <TrendChart data={trendData} />
-          </section>
-
-          <section className="panel">
-            <h2>4 · Summary</h2>
             <div className="stats">
               <div className="stat">
                 <div className="k">Visibility rate</div>
@@ -416,6 +391,45 @@ function App() {
             </p>
           </section>
 
+          <section className="panel">
+            <h2>3 · Visibility trend</h2>
+            <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem', maxWidth: '65ch' }}>
+              Historical visibility rate across completed runs for this brand
+              {loadingHistory ? ' (loading…)' : ''}.
+            </p>
+            <TrendChart data={trendData} />
+          </section>
+        </>
+      )}
+
+      {pilotDetail && resolvedProbes.length > 0 && (
+        <section className="panel">
+          <h2>4 · Neutral GEO probes for this scenario</h2>
+          <p style={{ marginTop: 0, color: '#64748b', maxWidth: '65ch' }}>
+            These are the exact questions sent for the next run (with your brand and location
+            substituted where <span className="mono">{'{location}'}</span> appears). None of them
+            include the tracked brand name in the prompt.
+          </p>
+          {pilotDetail.competitors.length > 0 && (
+            <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: 0 }}>
+              Competitor substring checks:{' '}
+              <span className="mono">{pilotDetail.competitors.join(', ')}</span>
+            </p>
+          )}
+          <ol className="probe-list" style={{ marginBottom: 0 }}>
+            {resolvedProbes.map((q) => (
+              <li key={q} style={{ marginBottom: '0.5rem' }}>
+                <span className="mono" style={{ fontSize: '0.82rem' }}>
+                  {q}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {run && (
+        <>
           <section className="panel">
             <h2>5 · Query-level results</h2>
             <p style={{ marginTop: 0, fontSize: '0.85rem', color: '#64748b' }}>
