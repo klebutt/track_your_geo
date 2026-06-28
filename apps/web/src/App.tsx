@@ -29,6 +29,7 @@ type QueryResult = {
   brand_mentioned: boolean
   competitors_mentioned: Record<string, boolean> | null
   cited_domains: CitedDomain[]
+  model_name: string
   latency_ms: number
   cost_usd: number
 }
@@ -312,6 +313,7 @@ function App() {
                 <thead>
                   <tr>
                     <th>Brand?</th>
+                    <th>Model</th>
                     <th>Query</th>
                     <th>Sources (domains)</th>
                     <th>Competitors mentioned</th>
@@ -326,6 +328,9 @@ function App() {
                         <span className={q.brand_mentioned ? 'badge ok' : 'badge no'}>
                           {q.brand_mentioned ? 'Yes' : 'No'}
                         </span>
+                      </td>
+                      <td className="mono" style={{ fontSize: '0.72rem', maxWidth: '120px' }}>
+                        {q.model_name || '—'}
                       </td>
                       <td style={{ maxWidth: '280px' }}>
                         <div className="mono" style={{ fontSize: '0.78rem' }}>
@@ -357,6 +362,7 @@ function App() {
             {run.query_results.map((q) => (
               <details key={`ex-${q.id}`} style={{ marginBottom: '0.75rem' }}>
                 <summary className="mono" style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
+                  {q.model_name ? `[${q.model_name}] ` : ''}
                   {q.query_text.slice(0, 80)}
                   {q.query_text.length > 80 ? '…' : ''}
                 </summary>

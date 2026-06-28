@@ -27,9 +27,16 @@ def _migrate_sqlite(engine) -> None:
     if "query_results" not in insp.get_table_names():
         return
     cols = {c["name"] for c in insp.get_columns("query_results")}
+    migrations: list[str] = []
     if "cited_domains" not in cols:
+        migrations.append("ALTER TABLE query_results ADD COLUMN cited_domains JSON")
+    if "model_name" not in cols:
+        migrations.append(
+            "ALTER TABLE query_results ADD COLUMN model_name VARCHAR(256) DEFAULT ''"
+        )
+    for stmt in migrations:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE query_results ADD COLUMN cited_domains JSON"))
+            conn.execute(text(stmt))
 
 
 def get_engine():

@@ -38,6 +38,7 @@ class QueryResultOut(BaseModel):
     brand_mentioned: bool
     competitors_mentioned: dict[str, bool] | None
     cited_domains: list[CitedDomainOut] = Field(default_factory=list)
+    model_name: str = ""
     latency_ms: float
     cost_usd: float
 

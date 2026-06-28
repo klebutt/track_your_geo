@@ -80,25 +80,93 @@ def complete(
     return text, meta
 
 
-def run_geo_query(
-    settings: Settings,
-    user_prompt: str,
-    *,
-    location: str | None = None,
-) -> tuple[str, dict[str, Any], list[Any]]:
-    """GEO probe via OpenAI search model; returns text, metadata, and url_citation annotations."""
+def _set_provider_api_key(settings: Settings, model: str) -> None:
+    if model.startswith("perplexity/"):
+        if settings.perplexity_api_key:
+            litellm.api_key = settings.perplexity_api_key
+        return
+    if model.startswith("gemini/"):
+        if settings.gemini_api_key:
+            litellm.api_key = settings.gemini_api_key
+        return
     if settings.openai_api_key:
         litellm.api_key = settings.openai_api_key
 
+
+def _probe_messages(user_prompt: str) -> list[dict[str, str]]:
     system = (
         "You are answering as a general knowledge assistant with web search. "
         "Answer naturally for the user's location when relevant. "
         "List specific venues or products by name when asked."
     )
-    messages = [
+    return [
         {"role": "system", "content": system},
         {"role": "user", "content": user_prompt},
     ]
+
+
+def _completion_meta(response: Any, *, model: str, probe_path: str, t0: float) -> dict[str, Any]:
+    latency_ms = (time.perf_counter() - t0) * 1000
+    pt, ct = _usage_tokens(response)
+    try:
+        cost = float(completion_cost(completion_response=response))
+    except Exception:
+        cost = 0.0
+    return {
+        "model": model,
+        "probe_path": probe_path,
+        "latency_ms": latency_ms,
+        "prompt_tokens": pt,
+        "completion_tokens": ct,
+        "cost_usd": cost,
+    }
+
+
+def run_geo_query_provider(
+    settings: Settings,
+    model: str,
+    user_prompt: str,
+    *,
+    location: str | None = None,
+) -> tuple[str, dict[str, Any], list[Any], list[str], Any | None]:
+    """GEO probe for a single provider model.
+
+    Returns text, metadata, annotations, perplexity citation URLs, and raw response
+    (for Gemini grounding extraction).
+    """
+    _set_provider_api_key(settings, model)
+    messages = _probe_messages(user_prompt)
+    t0 = time.perf_counter()
+
+    if model.startswith("gemini/"):
+        response = litellm.completion(
+            model=model,
+            messages=messages,
+            tools=[{"googleSearch": {}}],
+        )
+        choice = response.choices[0]
+        text = choice.message.content or ""
+        annotations = getattr(choice.message, "annotations", None) or []
+        meta = _completion_meta(response, model=model, probe_path="google_search", t0=t0)
+        return text, meta, list(annotations), [], response
+
+    if model.startswith("perplexity/"):
+        response = litellm.completion(model=model, messages=messages)
+        choice = response.choices[0]
+        text = choice.message.content or ""
+        annotations = getattr(choice.message, "annotations", None) or []
+        citation_urls = list(getattr(response, "citations", None) or [])
+        if not citation_urls:
+            search_results = getattr(response, "search_results", None) or []
+            for item in search_results:
+                if isinstance(item, dict):
+                    url = item.get("url")
+                else:
+                    url = getattr(item, "url", None)
+                if url:
+                    citation_urls.append(url)
+        meta = _completion_meta(response, model=model, probe_path="perplexity_citations", t0=t0)
+        return text, meta, list(annotations), citation_urls, None
 
     web_search_options: dict[str, Any] = {
         "search_context_size": settings.tygeo_search_context_size,
@@ -109,33 +177,34 @@ def run_geo_query(
             "approximate": {"region": location},
         }
 
-    t0 = time.perf_counter()
     response = litellm.completion(
-        model=settings.tygeo_probe_model,
+        model=model,
         messages=messages,
         web_search_options=web_search_options,
     )
-    latency_ms = (time.perf_counter() - t0) * 1000
-
     choice = response.choices[0]
     text = choice.message.content or ""
     annotations = getattr(choice.message, "annotations", None) or []
-    pt, ct = _usage_tokens(response)
+    meta = _completion_meta(response, model=model, probe_path="web_search", t0=t0)
+    return text, meta, list(annotations), [], None
 
-    try:
-        cost = float(completion_cost(completion_response=response))
-    except Exception:
-        cost = 0.0
 
-    meta = {
-        "model": settings.tygeo_probe_model,
-        "probe_path": "web_search",
-        "latency_ms": latency_ms,
-        "prompt_tokens": pt,
-        "completion_tokens": ct,
-        "cost_usd": cost,
-    }
-    return text, meta, list(annotations)
+def run_geo_query(
+    settings: Settings,
+    user_prompt: str,
+    *,
+    location: str | None = None,
+    model: str | None = None,
+) -> tuple[str, dict[str, Any], list[Any]]:
+    """Backward-compatible wrapper around the default probe model."""
+    probe_model = model or settings.tygeo_probe_model
+    text, meta, annotations, _urls, _response = run_geo_query_provider(
+        settings,
+        probe_model,
+        user_prompt,
+        location=location,
+    )
+    return text, meta, annotations
 
 
 def run_recommendations(

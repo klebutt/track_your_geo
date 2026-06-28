@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from tygeo.citations import build_cited_domains
 from tygeo.config import Settings
-from tygeo.llm import run_geo_query
+from tygeo.llm import run_geo_query_provider
 from tygeo.models import QueryResult, Run
 from tygeo.pilots import PilotProfile
 
@@ -51,11 +51,12 @@ def execute_run(
     total_pt = 0
     total_ct = 0
 
+    enabled_models = settings.enabled_probe_models
     run = Run(
         pilot_id=pilot.id,
         brand_name=brand,
         location=location,
-        model_name=settings.tygeo_probe_model,
+        model_name=",".join(enabled_models),
         status="running",
     )
     db.add(run)
@@ -65,33 +66,43 @@ def execute_run(
 
     for q_template in pilot.queries:
         q = pilot.format_query(q_template, brand=brand, location=location)
-        text, meta, annotations = run_geo_query(settings, q, location=location)
-        usage_log.append({"phase": "probe", "query": q, **meta})
-        total_cost += meta["cost_usd"]
-        total_pt += meta["prompt_tokens"]
-        total_ct += meta["completion_tokens"]
+        for model in enabled_models:
+            text, meta, annotations, citation_urls, gemini_response = run_geo_query_provider(
+                settings,
+                model,
+                q,
+                location=location,
+            )
+            usage_log.append({"phase": "probe", "query": q, **meta})
+            total_cost += meta["cost_usd"]
+            total_pt += meta["prompt_tokens"]
+            total_ct += meta["completion_tokens"]
 
-        brand_hit, comp = analyze_response(text, brand=brand, competitors=pilot.competitors)
-        cited = build_cited_domains(
-            text,
-            annotations,
-            brand_name=brand,
-            brand_domains=pilot.brand_domains,
-        )
-        qr = QueryResult(
-            run_id=run.id,
-            query_text=q,
-            response_text=text,
-            brand_mentioned=brand_hit,
-            competitors_mentioned=comp,
-            cited_domains=cited,
-            latency_ms=meta["latency_ms"],
-            cost_usd=meta["cost_usd"],
-            prompt_tokens=meta["prompt_tokens"],
-            completion_tokens=meta["completion_tokens"],
-        )
-        db.add(qr)
-        results.append((q, text, brand_hit, comp, meta))
+            brand_hit, comp = analyze_response(text, brand=brand, competitors=pilot.competitors)
+            cited = build_cited_domains(
+                text,
+                annotations,
+                brand_name=brand,
+                brand_domains=pilot.brand_domains,
+                model_name=model,
+                citation_urls=citation_urls,
+                gemini_response=gemini_response,
+            )
+            qr = QueryResult(
+                run_id=run.id,
+                query_text=q,
+                response_text=text,
+                brand_mentioned=brand_hit,
+                competitors_mentioned=comp,
+                cited_domains=cited,
+                model_name=model,
+                latency_ms=meta["latency_ms"],
+                cost_usd=meta["cost_usd"],
+                prompt_tokens=meta["prompt_tokens"],
+                completion_tokens=meta["completion_tokens"],
+            )
+            db.add(qr)
+            results.append((q, text, brand_hit, comp, meta))
 
     n = len(results)
     vis = sum(1 for _, _, hit, _, _ in results if hit) / n if n else 0.0

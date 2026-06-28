@@ -5,6 +5,8 @@ from tygeo.citations import (
     classify_cited_domains,
     extract_domains,
     extract_domains_from_annotations,
+    extract_domains_from_gemini,
+    extract_domains_from_list,
     is_brand_owned,
     normalize_domain,
 )
@@ -87,3 +89,62 @@ def test_classify_cited_domains_kinds():
         {"domain": "dishoom.com", "kind": "brand_owned"},
         {"domain": "timeout.com", "kind": "third_party"},
     ]
+
+
+def test_extract_domains_from_list_perplexity_urls():
+    urls = [
+        "https://www.dishoom.com/locations",
+        "https://timeout.com/london",
+        "https://www.dishoom.com/menu",
+    ]
+    assert extract_domains_from_list(urls) == ["dishoom.com", "timeout.com"]
+
+
+def test_extract_domains_from_gemini_grounding_chunks():
+    class Web:
+        uri = "https://example.com/guide"
+
+    class Chunk:
+        web = Web()
+
+    class Grounding:
+        grounding_chunks = [Chunk()]
+
+    class Candidate:
+        grounding_metadata = Grounding()
+
+    class Response:
+        candidates = [Candidate()]
+        choices = []
+
+    assert extract_domains_from_gemini(Response()) == ["example.com"]
+
+
+def test_build_cited_domains_perplexity_prefers_citation_urls():
+    cited = build_cited_domains(
+        "No urls in prose.",
+        [],
+        brand_name="Dishoom",
+        brand_domains=["dishoom.com"],
+        model_name="perplexity/sonar-pro",
+        citation_urls=["https://dishoom.com/menu"],
+    )
+    assert cited == [{"domain": "dishoom.com", "kind": "brand_owned"}]
+
+
+def test_build_cited_domains_openai_unchanged():
+    text = "No urls in prose."
+    annotations = [
+        {
+            "type": "url_citation",
+            "url_citation": {"url": "https://dishoom.com/menu", "title": "Dishoom"},
+        }
+    ]
+    cited = build_cited_domains(
+        text,
+        annotations,
+        brand_name="Dishoom",
+        brand_domains=["dishoom.com"],
+        model_name="gpt-4o-mini-search-preview",
+    )
+    assert cited == [{"domain": "dishoom.com", "kind": "brand_owned"}]

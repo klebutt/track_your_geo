@@ -1,12 +1,12 @@
 # Tasks: multi-llm-citations
 
-## Status: ready to implement
+## Status: implemented (validation complete; Railway deploy manual)
 
 Implement these tasks sequentially. Each adds a new provider or refactors the existing loop to support multiple models.
 
 ---
 
-### Task 1 — Update Config
+### Task 1 — Update Config ✓
 
 **File:** `apps/api/tygeo/config.py`
 
@@ -15,7 +15,7 @@ Add `enabled_probe_models` property to return a list.
 
 ---
 
-### Task 2 — Implement Perplexity/Gemini Domain Extraction
+### Task 2 — Implement Perplexity/Gemini Domain Extraction ✓
 
 **File:** `apps/api/tygeo/citations.py`
 
@@ -26,7 +26,7 @@ Update `build_cited_domains` to accept an optional `model_name` so it can pick t
 
 ---
 
-### Task 3 — Generic `run_geo_query` Refactor
+### Task 3 — Generic `run_geo_query` Refactor ✓
 
 **File:** `apps/api/tygeo/llm.py`
 
@@ -39,7 +39,7 @@ Ensure metadata (`cost_usd`, `latency_ms`, etc.) is returned consistently.
 
 ---
 
-### Task 4 — Update `execute_run` Loop
+### Task 4 — Update `execute_run` Loop ✓
 
 **File:** `apps/api/tygeo/analysis.py`
 
@@ -48,7 +48,7 @@ Calculate `visibility_rate` and `composite_score` across the total pool of model
 
 ---
 
-### Task 5 — Local Validation
+### Task 5 — Local Validation ✓
 
 1. Set `TYGEO_ENABLED_PROBES=gpt-4o-mini-search-preview,perplexity/sonar-pro` (if you have keys) or use dummy responses in a test script.
 2. Run a pilot and verify that multiple `query_results` rows are created per query.
@@ -66,8 +66,8 @@ Calculate `visibility_rate` and `composite_score` across the total pool of model
 
 ## Validation checklist
 
-- [ ] Run analysis completes with >1 model enabled
-- [ ] Perplexity citations are visible in the dashboard
-- [ ] Gemini citations are visible in the dashboard
-- [ ] Total run cost reflects all models used
-- [ ] No regression on OpenAI search citations
+- [x] Run analysis completes with >1 model enabled
+- [x] Perplexity citations are visible in the dashboard
+- [x] Gemini citations are visible in the dashboard
+- [x] Total run cost reflects all models used
+- [x] No regression on OpenAI search citations
