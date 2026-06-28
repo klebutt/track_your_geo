@@ -1,0 +1,21 @@
+# Tasks: Multi-Brand YAML Loading
+
+- [ ] **Infrastructure**
+    - [ ] Add `TYGEO_PILOT_DIR: Path = Field(default=Path("pilots"))` to `Config` class in `apps/api/tygeo/config.py`.
+    - [ ] Create base `pilots/demo/` directory in the repo root.
+- [ ] **Data Migration**
+    - [ ] Create `pilots/demo/dishoom-london.yaml` with data from `hardcoded_pilots.py`.
+    - [ ] Create `pilots/demo/clio-uk.yaml`.
+    - [ ] Create `pilots/demo/sdl-surveying-uk.yaml`.
+- [ ] **Core Logic**
+    - [ ] Update `list_pilots()` in `apps/api/tygeo/pilots.py` to recursively scan `TYGEO_PILOT_DIR` for `.yaml` files.
+    - [ ] Use `PilotProfile.from_yaml()` for loading.
+    - [ ] Add error handling (log warning if a YAML file is malformed instead of crashing the whole list).
+    - [ ] Remove `HARDCODED_PILOT_SPECS` import and usage.
+- [ ] **Cleanup**
+    - [ ] Delete `apps/api/tygeo/hardcoded_pilots.py`.
+    - [ ] Update any imports pointing to it.
+- [ ] **Validation**
+    - [ ] Run `pytest` to ensure no regressions in pilot loading.
+    - [ ] Run a local smoke test: `GET http://localhost:8000/api/pilots` to confirm the 3 demo brands appear.
+    - [ ] Add a temporary `test-brand.yaml` to the folder and verify it appears in the list.
