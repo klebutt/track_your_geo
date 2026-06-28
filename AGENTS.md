@@ -66,6 +66,6 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
   1. `structured-extraction` — replace substring match with LLM extraction call (unlocks full GEO score)
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
-- **Context:** See [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md) — multi-LLM, YAML pilots, async runs validated on Railway (partial Gemini on free tier).
+- **Context:** See [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md) — multi-LLM, YAML pilots, async runs, dashboard history (auto-load + trend chart), Railway volume persistence verified.
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

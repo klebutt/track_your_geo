@@ -8,12 +8,12 @@ This repository holds a **local prototype**: a working demo that runs on a lapto
 
 ## What this prototype does today
 
-- Pick a **demo brand** (e.g. **Dishoom** in London, **Clio** in the UK) from a web dashboard.
+- Pick a **demo brand** (e.g. **Dishoom** in London, **Clio** in the UK) from a web dashboard — if that brand has run before, the **latest results load immediately** (summary, trend chart, and query table).
 - Run a batch of **neutral questions** — the brand name is **not** baked into the question text, so answers are not artificially steered toward one name.
 - For each answer, check whether your brand (and competitors) **appear in the text**.
-- See a **visibility percentage**, a per-question breakdown, competitor mentions, and approximate **API cost** for the run.
+- See a **visibility percentage**, a **trend chart** across past runs, a per-question breakdown, competitor mentions, and approximate **API cost** for the run.
 
-Runs are saved locally so you can compare results across sessions on the same machine.
+Runs are stored in SQLite (locally under `apps/api/data/`, on Railway on a mounted volume) so you can compare results across sessions without re-running probes.
 
 ## How the product is meant to work
 
@@ -80,7 +80,7 @@ From [product_brief.md](product_brief.md):
 | **2** | Diagnose performance gaps | Yes | **Yes** — per-question table, competitor mentions |
 | **3** | Tailor dashboard (custom queries, data sources) | Later | **No** |
 | **4** | Take action (prioritised recommendations) | Yes | **Not yet** — recommendations are paused in this build |
-| **5** | Monitor progress over time | Later | **No** — no history/trends UI |
+| **5** | Monitor progress over time | Later | **Partial** — auto-loads last run per brand, visibility trend chart; no alerts or exports |
 | **6** | Report internally (export, share) | Later | **No** |
 
 ## Try the demo
@@ -89,9 +89,9 @@ From [product_brief.md](product_brief.md):
 
 You need a developer (or someone comfortable with a terminal) to start the app once per machine for **local** use. After that, anyone can use the browser UI:
 
-1. Open the dashboard (usually `http://localhost:5173`).
-2. Choose a **demo brand** from the dropdown.
-3. Click **Run analysis** and review visibility, each Q&A, and competitors.
+1. Open the dashboard (usually `http://localhost:5173`, or the [live prototype](https://track-your-geo.vercel.app/)).
+2. Choose a **demo brand** from the dropdown — if prior runs exist, the summary and trend chart appear immediately.
+3. Optionally click **Run analysis** for a fresh probe batch; review visibility, each Q&A, and competitors.
 
 Built-in demos live as YAML under [`apps/api/pilots/demo/`](apps/api/pilots/demo/) — **Dishoom** (London), **Clio** (UK legal tech), and **SDL Surveying** (UK residential surveys). Add a brand by dropping a `.yaml` file under [`apps/api/pilots/`](apps/api/pilots/) (no code change). Setup steps are under [For developers](#for-developers) below.
 
@@ -228,7 +228,8 @@ With all three default models enabled, each demo pilot issues **30 sequential pr
 2. Set **Root Directory** to `apps/api`.
 3. Add environment variables from the table above. For the first deploy, set `TYGEO_ALLOWED_ORIGINS=*` until you have the Vercel URL.
 4. Add a **Volume** mounted at `/data`.
-5. Confirm health: `GET https://trackyourgeo-production.up.railway.app/api/health` → `{"status":"ok"}`.
+5. Set `TYGEO_DATABASE_URL=sqlite:////data/tygeo.db` (four slashes — absolute path on the volume). **Do not** use `sqlite:///./data/tygeo.db` on Railway; that writes inside the ephemeral container and history is lost on redeploy.
+6. Confirm health: `GET https://trackyourgeo-production.up.railway.app/api/health` → `{"status":"ok"}`.
 
 Config: [`apps/api/railway.json`](apps/api/railway.json).
 

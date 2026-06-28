@@ -94,3 +94,4 @@ Pick one direction and make it explicit in product copy and specs:
 - Mention logic: `apps/api/tygeo/analysis.py` (`_mentions`, `analyze_response`) — substring match today; **structured extraction** is the planned upgrade.
 - Execution: `apps/api/tygeo/analysis.py` (`execute_run`, background `finish_run_probes`), multi-model LLM in `apps/api/tygeo/llm.py`.
 - Runs are **async**: UI polls `GET /api/runs/{id}`; per-model failures can yield partial results (common for Gemini free tier).
+- **History:** selecting a brand loads the latest completed run via `GET /api/runs?pilot_id=…`; a trend chart plots substring visibility % over past runs (still not consumer-chat parity).
