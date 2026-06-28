@@ -166,13 +166,17 @@ def test_execute_run_skips_extraction_when_brand_not_visible():
 
     with patch("tygeo.analysis.run_geo_query_provider", side_effect=fake_probe):
         with patch("tygeo.analysis.extract_mention_details") as mock_extract:
-            run = execute_run(
-                db,
-                settings,
-                pilot,
-                brand_override=None,
-                location_override=None,
-            )
+            with patch(
+                "tygeo.analysis.run_recommendations",
+                return_value=([], {"cost_usd": 0.0, "prompt_tokens": 0, "completion_tokens": 0}),
+            ):
+                run = execute_run(
+                    db,
+                    settings,
+                    pilot,
+                    brand_override=None,
+                    location_override=None,
+                )
 
     mock_extract.assert_not_called()
     assert run.query_results[0].mention_position == "not_mentioned"
@@ -234,13 +238,17 @@ def test_execute_run_runs_extraction_when_brand_visible():
 
     with patch("tygeo.analysis.run_geo_query_provider", side_effect=fake_probe):
         with patch("tygeo.analysis.extract_mention_details", side_effect=fake_extract) as mock_extract:
-            run = execute_run(
-                db,
-                settings,
-                pilot,
-                brand_override=None,
-                location_override=None,
-            )
+            with patch(
+                "tygeo.analysis.run_recommendations",
+                return_value=([], {"cost_usd": 0.0, "prompt_tokens": 0, "completion_tokens": 0}),
+            ):
+                run = execute_run(
+                    db,
+                    settings,
+                    pilot,
+                    brand_override=None,
+                    location_override=None,
+                )
 
     mock_extract.assert_called_once()
     qr = run.query_results[0]

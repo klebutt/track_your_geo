@@ -57,13 +57,17 @@ def test_execute_run_fan_out_per_query():
         )
 
     with patch("tygeo.analysis.run_geo_query_provider", side_effect=fake_probe):
-        run = execute_run(
-            db,
-            settings,
-            pilot,
-            brand_override=None,
-            location_override=None,
-        )
+        with patch(
+            "tygeo.analysis.run_recommendations",
+            return_value=([], {"cost_usd": 0.0, "prompt_tokens": 0, "completion_tokens": 0}),
+        ):
+            run = execute_run(
+                db,
+                settings,
+                pilot,
+                brand_override=None,
+                location_override=None,
+            )
 
     assert run.model_name == "model-a,model-b"
     assert len(run.query_results) == 2

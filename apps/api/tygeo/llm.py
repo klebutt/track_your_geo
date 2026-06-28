@@ -327,6 +327,10 @@ def run_recommendations(
     brand: str,
     location: str,
     visibility_rate: float,
+    composite_score: float,
+    sentiment_summary: dict[str, Any],
+    avg_position: float,
+    citation_gaps: list[dict[str, Any]],
     missing_queries: list[str],
     competitor_wins: list[str],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -334,13 +338,20 @@ def run_recommendations(
         {
             "brand": brand,
             "location": location,
-            "visibility_rate": visibility_rate,
+            "visibility_rate_pct": round(visibility_rate * 100, 1),
+            "composite_geo_score": composite_score,
+            "sentiment_summary": sentiment_summary,
+            "avg_position_score": avg_position,
+            "citation_gaps": citation_gaps[:15],
             "queries_where_brand_missing_or_weak": missing_queries[:25],
             "competitors_often_listed": competitor_wins[:15],
             "task": (
-                "Return a JSON array only (no markdown), each item: "
+                "You are a GEO Optimization Expert. Analyze the data above and return a JSON array "
+                "only (no markdown) with 3-5 specific, high-impact recommendations. Each item: "
                 '{"title": str, "detail": str, "impact": "high"|"medium"|"low", '
-                '"category": "website"|"third_party"|"pr_comms"|"other"}'
+                '"category": "website"|"third_party"|"pr_comms"|"technical"|"other"}. '
+                "Reference real domains from citation_gaps and named competitors when relevant. "
+                "Explain how each action improves visibility, position, sentiment, or citations."
             ),
         },
         ensure_ascii=False,
@@ -348,7 +359,10 @@ def run_recommendations(
     messages = [
         {
             "role": "system",
-            "content": "You advise brands on Generative Engine Optimization (GEO). Be practical.",
+            "content": (
+                "You advise brands on Generative Engine Optimization (GEO). "
+                "Be practical, specific, and tie advice to the probe data provided."
+            ),
         },
         {"role": "user", "content": user},
     ]

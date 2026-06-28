@@ -4,10 +4,10 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from tygeo.citations import build_cited_domains
+from tygeo.citations import build_cited_domains, normalize_domain
 from tygeo.config import Settings
-from tygeo.llm import extract_mention_details, run_geo_query_provider
-from tygeo.models import QueryResult, Run
+from tygeo.llm import extract_mention_details, run_geo_query_provider, run_recommendations
+from tygeo.models import QueryResult, Recommendation, Run
 from tygeo.pilots import PilotProfile
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,85 @@ def query_geo_score(
         + 0.20 * sentiment_score(sentiment)
         + 0.10 * citation_score(cited_domains)
     )
+
+
+def compute_sentiment_summary(results: list[dict]) -> dict:
+    """Breakdown of sentiment among probes where the brand was visible."""
+    visible = [r for r in results if r["brand_mentioned"]]
+    counts = {"positive": 0, "neutral": 0, "negative": 0}
+    for row in visible:
+        sentiment = row.get("sentiment", "neutral")
+        if sentiment not in counts:
+            sentiment = "neutral"
+        counts[sentiment] += 1
+    return {
+        "counts": counts,
+        "total_visible": len(visible),
+        "total_probes": len(results),
+    }
+
+
+def compute_avg_position_score(results: list[dict]) -> float:
+    visible = [r for r in results if r["brand_mentioned"]]
+    if not visible:
+        return 0.0
+    total = sum(position_score(r["mention_position"]) for r in visible)
+    return round(total / len(visible), 3)
+
+
+def compute_citation_gaps(
+    results: list[dict],
+    *,
+    brand_domains: list[str],
+) -> list[dict]:
+    """Third-party domains cited alongside competitors but not for the brand."""
+    configured_brand = {normalize_domain(d) for d in brand_domains if d.strip()}
+    brand_cited: set[str] = set()
+    gap_counts: dict[str, int] = {}
+
+    for row in results:
+        cited = row.get("cited_domains") or []
+        third_party: list[str] = []
+        has_brand_owned = False
+        for entry in cited:
+            domain = entry.get("domain", "") if isinstance(entry, dict) else ""
+            kind = entry.get("kind", "third_party") if isinstance(entry, dict) else "third_party"
+            normalized = normalize_domain(domain)
+            if kind == "brand_owned":
+                has_brand_owned = True
+                brand_cited.add(normalized)
+            elif normalized:
+                third_party.append(normalized)
+
+        competitors_hit = any((row.get("competitors_mentioned") or {}).values())
+        brand_weak = not row["brand_mentioned"] or not has_brand_owned
+        if competitors_hit and brand_weak:
+            for domain in third_party:
+                if domain not in configured_brand and domain not in brand_cited:
+                    gap_counts[domain] = gap_counts.get(domain, 0) + 1
+
+    ranked = sorted(gap_counts.items(), key=lambda item: (-item[1], item[0]))
+    return [{"domain": domain, "count": count} for domain, count in ranked[:15]]
+
+
+def _missing_or_weak_queries(results: list[dict]) -> list[str]:
+    weak: list[str] = []
+    for row in results:
+        if not row["brand_mentioned"] or row["mention_position"] != "first_mentioned":
+            weak.append(row["query_text"])
+    return weak
+
+
+def _competitor_wins(results: list[dict], competitors: list[str]) -> list[str]:
+    wins = {name: 0 for name in competitors}
+    for row in results:
+        if row["brand_mentioned"] and row["mention_position"] == "first_mentioned":
+            continue
+        for name, mentioned in (row.get("competitors_mentioned") or {}).items():
+            if mentioned and name in wins:
+                wins[name] += 1
+    ranked = sorted(wins.items(), key=lambda item: (-item[1], item[0]))
+    return [name for name, count in ranked if count > 0][:15]
 
 
 def aggregate_composite_score(rows: list[dict]) -> float:
@@ -259,10 +338,12 @@ def execute_run(
             db.add(qr)
             results.append(
                 {
+                    "query_text": q,
                     "brand_mentioned": brand_hit,
                     "mention_position": mention_position,
                     "sentiment": sentiment,
                     "cited_domains": cited,
+                    "competitors_mentioned": comp,
                 }
             )
             db.commit()
@@ -282,6 +363,52 @@ def execute_run(
     run.total_completion_tokens = total_ct
     run.visibility_rate = vis
     run.composite_score = aggregate_composite_score(results)
+
+    sentiment_summary = compute_sentiment_summary(results)
+    avg_position = compute_avg_position_score(results)
+    citation_gaps = compute_citation_gaps(results, brand_domains=pilot.brand_domains)
+    missing_queries = _missing_or_weak_queries(results)
+    competitor_wins = _competitor_wins(results, pilot.competitors)
+
+    try:
+        rec_items, rec_meta = run_recommendations(
+            settings,
+            brand=brand,
+            location=location,
+            visibility_rate=vis,
+            composite_score=run.composite_score,
+            sentiment_summary=sentiment_summary,
+            avg_position=avg_position,
+            citation_gaps=citation_gaps,
+            missing_queries=missing_queries,
+            competitor_wins=competitor_wins,
+        )
+        usage_log.append({"phase": "recommendations", **rec_meta})
+        total_cost += float(rec_meta.get("cost_usd") or 0.0)
+        total_pt += int(rec_meta.get("prompt_tokens") or 0)
+        total_ct += int(rec_meta.get("completion_tokens") or 0)
+        run.total_cost_usd = total_cost
+        run.total_prompt_tokens = total_pt
+        run.total_completion_tokens = total_ct
+        for item in rec_items:
+            db.add(
+                Recommendation(
+                    run_id=run.id,
+                    title=item["title"],
+                    detail=item["detail"],
+                    impact=item["impact"],
+                    category=item["category"],
+                )
+            )
+    except Exception as exc:
+        logger.exception("Recommendations failed for run %s", run.id)
+        usage_log.append(
+            {
+                "phase": "recommendations_error",
+                "error": str(exc),
+            }
+        )
+
     run.usage_log = usage_log
     db.commit()
     db.refresh(run)

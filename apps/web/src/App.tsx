@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { RecommendationsList } from './RecommendationsList'
+import { ScoreBreakdown } from './ScoreBreakdown'
 import { TrendChart, type TrendPoint } from './TrendChart'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
@@ -301,8 +303,8 @@ function App() {
           Simulated GEO visibility: the API runs a bank of <strong>brand-neutral</strong> user-style
           questions (they never name your brand). We measure whether the model&apos;s reply contains
           the brand string, extract <strong>sentiment</strong> and <strong>position</strong> when it
-          does, and track how often configured competitors appear. Recommendations are disabled in
-          this build.
+          does, and track how often configured competitors appear. After each run, the API generates
+          tailored optimization recommendations from sentiment, position, and citation gaps.
         </p>
       </header>
 
@@ -415,12 +417,23 @@ function App() {
             </p>
             <TrendChart data={trendData} />
           </section>
+
+          <section className="panel">
+            <h2>4 · Insights &amp; optimization</h2>
+            <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem', maxWidth: '65ch' }}>
+              How your composite GEO score is calculated, plus LLM-generated actions based on this
+              run&apos;s visibility, sentiment, position, and citation gaps.
+            </p>
+            <ScoreBreakdown compositeScore={run.composite_score} queryResults={run.query_results} />
+            <h3 className="insights-subheading">Recommended actions</h3>
+            <RecommendationsList recommendations={run.recommendations} />
+          </section>
         </>
       )}
 
       {pilotDetail && resolvedProbes.length > 0 && (
         <section className="panel">
-          <h2>4 · Neutral GEO probes for this scenario</h2>
+          <h2>5 · Neutral GEO probes for this scenario</h2>
           <p style={{ marginTop: 0, color: '#64748b', maxWidth: '65ch' }}>
             These are the exact questions sent for the next run (with your brand and location
             substituted where <span className="mono">{'{location}'}</span> appears). None of them
@@ -447,7 +460,7 @@ function App() {
       {run && (
         <>
           <section className="panel">
-            <h2>5 · Query-level results</h2>
+            <h2>6 · Query-level results</h2>
             <p style={{ marginTop: 0, fontSize: '0.85rem', color: '#64748b' }}>
               Domains from web-search citation metadata per probe. Teal = brand-owned (
               {pilotDetail?.brand_domains?.length
@@ -516,7 +529,7 @@ function App() {
           </section>
 
           <section className="panel">
-            <h2>6 · Full model replies</h2>
+            <h2>7 · Full model replies</h2>
             {run.query_results.map((q) => (
               <details key={`ex-${q.id}`} style={{ marginBottom: '0.75rem' }}>
                 <summary className="mono" style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
@@ -542,21 +555,6 @@ function App() {
               </details>
             ))}
           </section>
-
-          {run.recommendations.length > 0 && (
-            <section className="panel">
-              <h2>Recommended actions</h2>
-              {run.recommendations.map((r) => (
-                <div key={r.id} className="rec">
-                  <div className="impact">
-                    {r.impact} · {r.category}
-                  </div>
-                  <h3>{r.title}</h3>
-                  <p>{r.detail}</p>
-                </div>
-              ))}
-            </section>
-          )}
         </>
       )}
     </div>
