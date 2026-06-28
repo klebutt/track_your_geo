@@ -28,7 +28,7 @@ Track Your GEO: local MVP for GEO visibility probing. Agents collaborate with hu
 - [product_brief.md](product_brief.md) — journeys and MVP scope.
 - [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) — scoring limits and improvement options; required for probe/score/UI work.
 - **Probes:** brand-neutral questions only (no brand name in prompt text).
-- **Score:** API + substring index; not consumer ChatGPT parity unless explicitly scoped.
+- **Score:** Substring visibility gate + LLM extraction (sentiment, position) for composite GEO score; not consumer ChatGPT parity unless explicitly scoped.
 - **Demos:** YAML pilots under [apps/api/pilots/](apps/api/pilots/) (default `pilots/demo/`).
 - **Recommendations:** off for current build unless human re-enables via settings.
 
@@ -55,17 +55,19 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 |--------|----------|
 | Product intent | [product_brief.md](product_brief.md) |
 | Scoring realism | [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) |
+| Composite score formula | [apps/api/docs/geo-scoring-formula.md](apps/api/docs/geo-scoring-formula.md) |
 | Session history | [docs/worklog/](docs/worklog/) |
 | Behavior specs | [openspec/specs/](openspec/specs/) |
 | Active proposals | [openspec/changes/](openspec/changes/) |
 
 ## Current focus (update by humans)
 
-- **Active change:** _(none)_
+- **Active change:** _(none — archive `structured-extraction` when ready)_
 - **Priorities (in order):**
-  1. `structured-extraction` — replace substring match with LLM extraction call (unlocks full GEO score)
+  1. Archive **`structured-extraction`** and sync `openspec/specs/geo-probe/spec.md`
+  2. Calibration panel vs consumer ChatGPT (see [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md))
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
-- **Context:** See [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md) — multi-LLM, YAML pilots, async runs, dashboard history (auto-load + trend chart), Railway volume persistence verified.
+- **Context:** See [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md) — multi-LLM, YAML pilots, async runs, dashboard history, **structured extraction** (sentiment + position columns, weighted composite score) verified in prod.
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

@@ -137,6 +137,41 @@ The system MUST compute visibility rate as the fraction of stored probe response
 - **WHEN** a stored assistant text contains the pilot brand substring
 - **THEN** the corresponding `query_results` row records `brand_mentioned` as true, otherwise false
 
+### Requirement: Structured mention extraction
+
+When `brand_mentioned` is true for a probe row, the system MUST call a structured extraction LLM (`gpt-4o-mini` via LiteLLM, JSON response format) to populate `sentiment`, `mention_position`, and `relevance_score` on that row. When `brand_mentioned` is false, the system MUST skip extraction and MUST set defaults: `sentiment=neutral`, `mention_position=not_mentioned`, `relevance_score=0.0`.
+
+Extraction call cost and token usage MUST be aggregated into the run totals and recorded in `usage_log` with `phase: extraction`.
+
+#### Scenario: Extract on visible mention
+
+- **WHEN** a probe completes and the brand substring is found in the assistant text
+- **THEN** the system runs structured extraction and persists sentiment (`positive`, `neutral`, or `negative`), mention position (`first_mentioned`, `secondary`, or `not_mentioned`), and relevance score (0.0–1.0) on the row
+
+#### Scenario: Skip extraction when brand absent
+
+- **WHEN** a probe completes and the brand substring is not found
+- **THEN** the system does not call extraction for that row
+- **AND** no `phase: extraction` entry appears in `usage_log` for that query/model pair
+
+### Requirement: Composite GEO score
+
+The system MUST compute a run-level `composite_score` on a 0–100 scale as the mean of per-query weighted scores. Each per-query score MUST blend: visibility 40%, mention position 30%, sentiment 20%, and citation volume 10% (linear scale capped at five citations). The formula MUST be documented in `apps/api/docs/geo-scoring-formula.md`.
+
+#### Scenario: Weighted composite on completed run
+
+- **WHEN** a run completes with stored query rows
+- **THEN** `composite_score` reflects the weighted formula across all rows in that run
+
+### Requirement: Sentiment and position in dashboard
+
+The web dashboard MUST show **Sentiment** and **Position** for each query result row after a completed run. Sentiment MUST be visually distinguishable (e.g. color-coded chips). Position MUST display human-readable labels (e.g. First, Secondary).
+
+#### Scenario: Per-row sentiment and position
+
+- **WHEN** a user views query-level results after a completed run with extraction data
+- **THEN** each row shows sentiment and mention position alongside existing columns
+
 ### Requirement: Recommendations
 
 After probes complete, the system MUST call the LLM for a JSON array of recommendations and MUST persist title, detail, impact, and category linked to the run.
@@ -209,4 +244,4 @@ The repository MUST ship tests for deterministic mention logic and at least one 
 #### Scenario: CI-safe regression tests
 
 - **WHEN** a developer runs `pytest eval`
-- **THEN** substring-based DeepEval metrics and pure unit tests execute without network calls
+- **THEN** substring-based DeepEval metrics, extraction unit tests, and pure unit tests execute without live LLM probes

@@ -300,15 +300,16 @@ function App() {
         <p style={{ margin: '0.35rem 0 0', color: '#64748b', maxWidth: '62ch' }}>
           Simulated GEO visibility: the API runs a bank of <strong>brand-neutral</strong> user-style
           questions (they never name your brand). We measure whether the model&apos;s reply contains
-          the brand string and how often configured competitors appear. Recommendations are
-          disabled in this build.
+          the brand string, extract <strong>sentiment</strong> and <strong>position</strong> when it
+          does, and track how often configured competitors appear. Recommendations are disabled in
+          this build.
         </p>
       </header>
 
       <div className="disclaimer">
         <strong>Limitations:</strong> Probes fan out to configured models (default: OpenAI search,{' '}
         Perplexity sonar-pro, Gemini 2.5 Flash) — API paths, not consumer chat UIs. Visibility uses
-        a <strong>case-insensitive substring</strong> match on the brand name.{' '}
+        a substring gate; visible rows get an LLM extraction pass for sentiment and position.{' '}
         <strong>Sources</strong> are domains from provider citation metadata (and URLs in reply
         text). Gemini free tier may rate-limit; partial results are possible. Treat outputs as
         directional.
@@ -371,7 +372,7 @@ function App() {
                 <div className="v">{(run.visibility_rate * 100).toFixed(0)}%</div>
               </div>
               <div className="stat">
-                <div className="k">Composite score (v0.1)</div>
+                <div className="k">Composite GEO score</div>
                 <div className="v">{run.composite_score.toFixed(1)}</div>
               </div>
               <div className="stat">
@@ -391,7 +392,8 @@ function App() {
             </div>
             <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 0 }}>
               Visibility = fraction of probes where the assistant text contained &quot;
-              {run.brand_name}&quot; (substring). Tokens: {run.total_prompt_tokens} prompt +{' '}
+              {run.brand_name}&quot; (substring gate). Composite score blends visibility, position,
+              sentiment, and citations. Tokens: {run.total_prompt_tokens} prompt +{' '}
               {run.total_completion_tokens} completion.
               {probeErrors.length > 0 && (
                 <>

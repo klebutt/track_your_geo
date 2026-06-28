@@ -10,8 +10,8 @@ This repository holds a **local prototype**: a working demo that runs on a lapto
 
 - Pick a **demo brand** (e.g. **Dishoom** in London, **Clio** in the UK) from a web dashboard — if that brand has run before, the **latest results load immediately** (summary, trend chart, and query table).
 - Run a batch of **neutral questions** — the brand name is **not** baked into the question text, so answers are not artificially steered toward one name.
-- For each answer, check whether your brand (and competitors) **appear in the text**.
-- See a **visibility percentage**, a **trend chart** across past runs, a per-question breakdown, competitor mentions, and approximate **API cost** for the run.
+- For each answer, check whether your brand (and competitors) **appear in the text**; when the brand is visible, run a **structured extraction** pass for **sentiment** and **mention position**.
+- See a **visibility percentage**, a **composite GEO score** (visibility + position + sentiment + citations), a **trend chart** across past runs, a per-question breakdown (with Sentiment and Position columns), competitor mentions, and approximate **API cost** for the run.
 
 Runs are stored in SQLite (locally under `apps/api/data/`, on Railway on a mounted volume) so you can compare results across sessions without re-running probes.
 
@@ -45,9 +45,10 @@ When someone clicks **Run analysis** in the dashboard:
 2. The API **starts the run immediately** and returns `status: running` (probes continue in the background — a full demo pilot takes **~4–8 minutes** with three models).
 3. The UI **polls every few seconds** and shows probe progress (`N complete`).
 4. For each **neutral** question, every model in `TYGEO_ENABLED_PROBES` is called (default: OpenAI search, Perplexity sonar-pro, Gemini 2.5 Flash).
-5. It records each answer and checks whether the brand name and competitor names appear in the text.
-6. If an individual model fails (e.g. Gemini free-tier quota), other models still run; the summary notes partial results.
-7. The dashboard shows the score, each question/answer pair (with **model name**), and competitor hits.
+5. It records each answer and checks whether the brand name and competitor names appear in the text (substring gate).
+6. When the brand is visible, a second **`gpt-4o-mini`** call extracts **sentiment**, **mention position**, and **relevance** (JSON mode).
+7. If an individual model fails (e.g. Gemini free-tier quota), other models still run; the summary notes partial results.
+8. The dashboard shows visibility %, composite GEO score, each question/answer pair (with **model name**, **sentiment**, and **position**), and competitor hits.
 
 ```mermaid
 sequenceDiagram
@@ -59,14 +60,20 @@ sequenceDiagram
   loop For each neutral question
     App->>AI: Ask question (no brand in prompt)
     AI-->>App: Answer text
-    App->>App: Check if brand / competitors<br/>appear in answer
+    App->>App: Check if brand / competitors<br/>appear in answer (substring)
+    opt Brand visible
+      App->>AI: Extract sentiment + position
+      AI-->>App: Structured JSON
+    end
   end
-  App-->>User: Visibility %, per-question results,<br/>competitor mentions, run cost
+  App-->>User: Visibility %, composite score,<br/>sentiment & position per row,<br/>competitor mentions, run cost
 ```
 
 ## Understanding the score
 
-**Visibility** here means: *of the neutral questions we asked, in how many answers does the brand name appear?* (matched as plain text in the reply, case-insensitive).
+**Visibility rate** means: *of the neutral questions we asked (across all enabled models), in how many answers does the brand name appear?* (matched as plain text in the reply, case-insensitive).
+
+When the brand is visible, an additional **`gpt-4o-mini`** extraction call records **sentiment** (positive / neutral / negative) and **mention position** (first vs secondary). The **composite GEO score** (0–100) is a weighted blend of visibility, position, sentiment, and citation count per row — see [apps/api/docs/geo-scoring-formula.md](apps/api/docs/geo-scoring-formula.md).
 
 That is useful for **trends and comparisons** (your brand vs competitors, or this run vs a later run) inside the tool. It is **not** the same as logging into consumer ChatGPT with web search and checking what one user sees — models, browsing, region, and UI all differ. See [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) for an honest comparison and how we might improve fidelity over time.
 
@@ -95,7 +102,7 @@ You need a developer (or someone comfortable with a terminal) to start the app o
 
 Built-in demos live as YAML under [`apps/api/pilots/demo/`](apps/api/pilots/demo/) — **Dishoom** (London), **Clio** (UK legal tech), and **SDL Surveying** (UK residential surveys). Add a brand by dropping a `.yaml` file under [`apps/api/pilots/`](apps/api/pilots/) (no code change). Setup steps are under [For developers](#for-developers) below.
 
-Each run uses your configured provider API keys and incurs per-query cost across all enabled probe models; the UI shows approximate spend for the run. A full demo pilot with three models is **30 API calls** (10 queries × 3 models).
+Each run uses your configured provider API keys and incurs per-query cost across all enabled probe models, plus a small extraction cost (~$0.001) per **visible** row. The UI shows approximate spend for the run. A full demo pilot with three models is **30 probe calls** (10 queries × 3 models), plus up to 30 extraction calls when the brand appears in every answer.
 
 ## Learn more
 
@@ -103,6 +110,7 @@ Each run uses your configured provider API keys and incurs per-query cost across
 |--------|----------|
 | Product vision, users, MVP scope | [product_brief.md](product_brief.md) |
 | Score vs real ChatGPT-style search | [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) |
+| Composite score formula | [apps/api/docs/geo-scoring-formula.md](apps/api/docs/geo-scoring-formula.md) |
 | Recent decisions and next steps | [docs/worklog/](docs/worklog/) |
 
 ---
@@ -166,6 +174,7 @@ If the web UI shows proxy errors right after startup, wait a few seconds for the
 | [openspec/](openspec/) | OpenSpec specs and change proposals |
 | [eval/](eval/) | Pytest + DeepEval checks |
 | [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) | Limits of the prototype score vs real assistant search; ways to improve fidelity |
+| [apps/api/docs/geo-scoring-formula.md](apps/api/docs/geo-scoring-formula.md) | Weighted composite score (visibility, position, sentiment, citations) |
 | [docs/worklog/](docs/worklog/) | Session summaries and suggested next steps |
 | [product_brief.md](product_brief.md) | Product context |
 | [AGENTS.md](AGENTS.md) | Agent/human collaboration workflow |

@@ -1,6 +1,8 @@
 # GEO scoring: how close are we to “real” ChatGPT search?
 
-The prototype measures **simulated** visibility: neutral user-style questions, answers from a **single configured LLM API** (via LiteLLM), and **case-insensitive substring** detection for the brand name in the assistant text. That is useful for **trends and comparisons** inside the product, but it is **not** the same as what any given user sees in **consumer ChatGPT** (or other assistants) when they use **search-like** behaviour.
+The prototype measures **simulated** visibility: neutral user-style questions, answers from **configured LLM APIs** (via LiteLLM, multi-model by default), a **case-insensitive substring** gate for brand visibility, and — when the brand appears — a **structured extraction** call (`gpt-4o-mini`, JSON mode) for sentiment, mention position, and relevance. The run **composite score** blends visibility, position, sentiment, and citation volume (see [apps/api/docs/geo-scoring-formula.md](../apps/api/docs/geo-scoring-formula.md)).
+
+That stack is useful for **trends and comparisons** inside the product, but it is **not** the same as what any given user sees in **consumer ChatGPT** (or other assistants) when they use **search-like** behaviour.
 
 This note explains the gap and practical ways to move toward a score that **tracks** real-world visibility more closely.
 
@@ -10,11 +12,11 @@ This note explains the gap and practical ways to move toward a score that **trac
 
 | Factor | Typical API prototype (this repo) | Consumer ChatGPT-style search |
 |--------|-----------------------------------|-------------------------------|
-| **Model & stack** | One model name in config | May differ by tier, rollout, and internal routing |
+| **Model & stack** | Configured probe models (`TYGEO_ENABLED_PROBES`) | May differ by tier, rollout, and internal routing |
 | **Web / search tools** | Usually **no live browse** | Often **search + browse**, snippets, links, recency |
 | **Geo** | Region implied mainly in prompt text | Account, IP, locale, and product defaults |
 | **Queries** | Curated bank of probes | Long tail of real phrasing, follow-ups, refinements |
-| **Measurement** | Substring: brand string in reply | Lists, cards, citations; entities may appear without the exact brand string |
+| **Measurement** | Substring visibility gate + LLM extraction for sentiment/position on visible rows | Lists, cards, citations; entities may appear without the exact brand string |
 
 Until you measure **on the consumer surface** or build a **calibrated proxy**, a single percentage should be read as an **index**, not parity with “what ChatGPT showed me yesterday.”
 
@@ -46,14 +48,13 @@ More probes reduce **variance**; realistic phrasing reduces **systematic bias** 
 
 ### 4. Move beyond substring match for “visible”
 
-Substring match is transparent but misaligned with user perception (“they recommended that chain” without using the exact string).
+**Shipped (2026-06-28):** When the substring gate finds the brand, a cheap **structured LLM extraction** call records sentiment (`positive` / `neutral` / `negative`), mention position (`first_mentioned` / `secondary`), and relevance. These feed the weighted composite score alongside citations. Extraction is skipped when the brand is not visible (~$0.001 per visible row).
 
-Stronger proxies (often combined):
+Remaining gaps vs user perception:
 
-- **Structured LLM judge** with a strict rubric (e.g. “named as an option to consider,” not mere substring).
+- Substring gate can still false-positive (e.g. partial name matches) or miss entities named differently.
+- The extraction judge should be **calibrated** on a human-labelled sample so drift is visible over time.
 - **Entity / canonical ID** resolution when you have a stable knowledge base.
-
-Judges should be **calibrated** on a human-labelled sample so you know when they drift.
 
 ### 5. Report a small bundle, not one headline number
 
@@ -75,7 +76,7 @@ Ship the score as something like: **“Visibility index v3, calibrated to panel 
 
 ## What we should not claim
 
-A **plain LLM API** run with **no search/browse**, **fixed neutral prompts**, and **substring** brand detection is **not** “the ChatGPT score.” It can still be a **useful internal and longitudinal signal** if labelled clearly (e.g. API visibility under stated assumptions).
+A **multi-model API** run with **search-grounded probes**, **substring visibility gate**, and **LLM extraction** for sentiment/position is **not** “the ChatGPT score.” It can still be a **useful internal and longitudinal signal** if labelled clearly (e.g. API visibility index under stated assumptions).
 
 ---
 
@@ -85,13 +86,17 @@ Pick one direction and make it explicit in product copy and specs:
 
 1. **Calibration** — Small recurring panel on the consumer product vs current index; document drift.
 2. **Search-enabled API path** — When licensing and access allow, add a second “grounded” channel and report both scores.
+3. **Extraction judge calibration** — Human-label a fixed sample of probe replies; track extraction accuracy over prompt/model changes.
 
 ---
 
 ## Related code in this repo
 
 - Probe text: `apps/api/pilots/` YAML templates (brand-neutral queries only).
-- Mention logic: `apps/api/tygeo/analysis.py` (`_mentions`, `analyze_response`) — substring match today; **structured extraction** is the planned upgrade.
+- Visibility gate: `apps/api/tygeo/analysis.py` (`_mentions`, `analyze_response`) — case-insensitive substring.
+- Structured extraction: `apps/api/tygeo/llm.py` (`extract_mention_details`) — `gpt-4o-mini`, JSON mode; only when substring gate passes.
+- Composite score: `apps/api/tygeo/analysis.py` (`query_geo_score`, `aggregate_composite_score`); formula in [apps/api/docs/geo-scoring-formula.md](../apps/api/docs/geo-scoring-formula.md).
 - Execution: `apps/api/tygeo/analysis.py` (`execute_run`, background `finish_run_probes`), multi-model LLM in `apps/api/tygeo/llm.py`.
 - Runs are **async**: UI polls `GET /api/runs/{id}`; per-model failures can yield partial results (common for Gemini free tier).
-- **History:** selecting a brand loads the latest completed run via `GET /api/runs?pilot_id=…`; a trend chart plots substring visibility % over past runs (still not consumer-chat parity).
+- **History:** selecting a brand loads the latest completed run via `GET /api/runs?pilot_id=…`; a trend chart plots visibility % over past runs (still not consumer-chat parity).
+- **Dashboard:** query table shows Sentiment and Position columns per probe row (prod verified 2026-06-28).

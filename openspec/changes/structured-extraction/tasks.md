@@ -32,11 +32,11 @@
 
     - [x] Add "Sentiment" and "Position" columns to the dashboard table in `apps/web/`.
 
-- [ ] **Validation**
+- [x] **Validation**
 
     - [x] Run `pytest` to ensure the new extraction function handles various response formats.
 
-    - [ ] Perform a local run with a known brand (e.g., Dishoom) and verify that "Positive" sentiment and "First" position are correctly extracted and displayed.
+    - [x] Perform a local run with a known brand (e.g., Dishoom) and verify that "Positive" sentiment and "First" position are correctly extracted and displayed.
 
     - [x] Verify that runs where the brand is NOT mentioned do not trigger extraction calls (check `usage_log`).
 
