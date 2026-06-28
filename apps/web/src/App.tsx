@@ -88,6 +88,30 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function pollUntilRunComplete(
+  apiBase: string,
+  runId: number,
+  onProgress: (run: Run) => void,
+): Promise<Run> {
+  const deadline = Date.now() + 20 * 60 * 1000
+  while (Date.now() < deadline) {
+    const current = await fetchJson<Run>(`${apiBase}/api/runs/${runId}`)
+    onProgress(current)
+    if (current.status === 'completed') return current
+    if (current.status === 'failed') {
+      throw new Error('Analysis run failed on the server. Check API logs and provider keys.')
+    }
+    await sleep(3000)
+  }
+  throw new Error(
+    'Run is still in progress after 20 minutes. Refresh the page later or check run history.',
+  )
+}
+
 function App() {
   const [pilots, setPilots] = useState<PilotSummary[]>([])
   const [pilotId, setPilotId] = useState('')
@@ -161,12 +185,16 @@ function App() {
       } = { pilot_id: pilotId }
       if (brand.trim()) body.brand_name = brand.trim()
       if (location.trim()) body.location = location.trim()
-      const r = await fetchJson<Run>(`${API_BASE}/api/runs`, {
+      const started = await fetchJson<Run>(`${API_BASE}/api/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      setRun(r)
+      setRun(started)
+      if (started.status === 'running') {
+        const completed = await pollUntilRunComplete(API_BASE, started.id, setRun)
+        setRun(completed)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Run failed')
     } finally {
@@ -222,7 +250,9 @@ function App() {
             <div>
               <label>&nbsp;</label>
               <button type="button" className="primary" onClick={() => void onRun()} disabled={running || !pilotId}>
-                {running ? 'Running probes…' : 'Run analysis'}
+                {running
+                  ? `Running probes… (${run?.query_results?.length ?? 0} complete)`
+                  : 'Run analysis'}
               </button>
             </div>
             <div>

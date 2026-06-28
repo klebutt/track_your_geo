@@ -53,3 +53,9 @@ def get_session() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def new_session() -> Session:
+    if _SessionLocal is None:
+        raise RuntimeError("Database not initialized")
+    return _SessionLocal()

@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
-from tygeo.analysis import execute_run
+from tygeo.analysis import create_pending_run, finish_run_probes
 from tygeo.config import Settings
 from tygeo.db import get_session, init_db
 from tygeo.models import Run
@@ -81,6 +81,7 @@ def api_get_pilot(pilot_id: str, settings: Settings = Depends(get_settings)):
 @app.post("/api/runs", response_model=RunOut)
 def api_create_run(
     body: RunCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(db_session),
     settings: Settings = Depends(get_settings),
 ):
@@ -92,10 +93,17 @@ def api_create_run(
     pilot = load_pilot(settings.pilot_dir_path, body.pilot_id)
     if not pilot:
         raise HTTPException(status_code=404, detail="Pilot not found")
-    run = execute_run(
+    run = create_pending_run(
         db,
         settings,
         pilot,
+        brand_override=body.brand_name,
+        location_override=body.location,
+    )
+    background_tasks.add_task(
+        finish_run_probes,
+        run.id,
+        body.pilot_id,
         brand_override=body.brand_name,
         location_override=body.location,
     )
