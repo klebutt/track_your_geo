@@ -62,10 +62,9 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 ## Current focus (update by humans)
 
-- **Active change:** _(none — archive `structured-extraction` when ready)_
+- **Active change:** _(none)_
 - **Priorities (in order):**
-  1. Archive **`structured-extraction`** and sync `openspec/specs/geo-probe/spec.md`
-  2. Calibration panel vs consumer ChatGPT (see [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md))
+  1. Calibration panel vs consumer ChatGPT (see [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md))
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
 - **Context:** See [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md) — multi-LLM, YAML pilots, async runs, dashboard history, **structured extraction** (sentiment + position columns, weighted composite score) verified in prod.
