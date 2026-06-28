@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field
 
-from tygeo.hardcoded_pilots import HARDCODED_PILOT_SPECS
+logger = logging.getLogger(__name__)
+
+_YAML_SUFFIXES = {".yaml", ".yml"}
 
 
 class PilotProfile(BaseModel):
@@ -36,8 +39,27 @@ class PilotProfile(BaseModel):
 
 
 def list_pilots(pilot_dir: Path) -> list[PilotProfile]:
-    """Return built-in pilots (real brands). YAML under ``pilot_dir`` is ignored for listing."""
-    return [PilotProfile.model_validate(spec) for spec in HARDCODED_PILOT_SPECS]
+    """Return pilots loaded recursively from YAML files under ``pilot_dir``."""
+    if not pilot_dir.is_dir():
+        logger.warning("Pilot directory does not exist: %s", pilot_dir)
+        return []
+
+    pilots: list[PilotProfile] = []
+    seen_ids: set[str] = set()
+    for path in sorted(pilot_dir.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in _YAML_SUFFIXES:
+            continue
+        try:
+            pilot = PilotProfile.from_yaml(path)
+        except Exception as exc:
+            logger.warning("Skipping invalid pilot file %s: %s", path, exc)
+            continue
+        if pilot.id in seen_ids:
+            logger.warning("Duplicate pilot id %r in %s; skipping", pilot.id, path)
+            continue
+        seen_ids.add(pilot.id)
+        pilots.append(pilot)
+    return pilots
 
 
 def load_pilot(pilot_dir: Path, pilot_id: str) -> PilotProfile | None:

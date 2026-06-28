@@ -1,0 +1,23 @@
+id: dishoom-london
+brand_name: Dishoom
+location: London, UK
+competitors:
+  - The Ivy
+  - Hawksmoor
+  - Gaucho
+queries:
+  - What are the best restaurants for a business dinner in {location}? Mention specific names.
+  - Top 5 casual dining spots in {location} — list brands or restaurant names.
+  - Where should I take a team of 8 for lunch near the City of London?
+  - Best places for late dinner after theatre in {location}.
+  - I'm visiting {location} and want a buzzy Indian or South Asian restaurant — what do people recommend? Name venues.
+  - Quiet restaurants in central London good for a client dinner — list a few with names.
+  - Best spots in {location} for a long weekend brunch with friends; name actual restaurants.
+  - Popular Indian restaurants in {location} for first-time visitors — name a few specific venues.
+  - Hen party dinner in central London — fun atmosphere, not too expensive. What are good options by name?
+  - Best restaurants near Covent Garden for pre-theatre dining; I need names not just areas.
+seed_domains:
+  - example-travel.com
+  - example-foodguide.co.uk
+brand_domains:
+  - dishoom.com

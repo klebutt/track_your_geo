@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     tygeo_enabled_probes: str = "gpt-4o-mini-search-preview"
     tygeo_search_context_size: str = "low"
     tygeo_database_url: str = "sqlite:///./data/tygeo.db"
-    tygeo_pilot_dir: str = "pilot"
+    tygeo_pilot_dir: str = "pilots"
     tygeo_allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     openai_api_key: str | None = None
     perplexity_api_key: str | None = None

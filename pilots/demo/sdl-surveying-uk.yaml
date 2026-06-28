@@ -1,0 +1,23 @@
+id: sdl-surveying-uk
+brand_name: SDL Surveying
+location: United Kingdom
+competitors:
+  - e.surv
+  - Countrywide Home Surveys
+  - RightSurvey
+queries:
+  - What are the best companies for a RICS Level 2 homebuyer survey in England? Name specific firms.
+  - Who should I use for a RICS Level 3 building survey before buying a house in the UK? List providers by name.
+  - Compare leading residential property surveying firms in the {location} — name companies people recommend.
+  - I'm buying my first home in the UK — which RICS chartered surveyors do buyers mention most often?
+  - Best ways to get quotes for a pre-purchase home survey in the UK — name websites or brands.
+  - Snagging survey providers for new-build homes in England and Wales — who are the main players?
+  - How do I choose a surveyor for a house purchase survey? Name reputable UK firms.
+  - RICS surveyors for older or listed properties in the UK — which specialists should I shortlist?
+  - Independent surveyors versus estate-agent recommended surveyors in the UK — who are trusted names?
+  - Mortgage valuation versus full structural survey in the UK — which surveying companies should I consider?
+seed_domains:
+  - rics.org
+  - hoa.org.uk
+brand_domains:
+  - sdlsurveying.co.uk
