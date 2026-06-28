@@ -1,6 +1,6 @@
 """Unit tests for mention detection and scoring helpers."""
 
-from tygeo.analysis import analyze_response, composite_score
+from tygeo.analysis import analyze_response, composite_score, query_geo_score
 
 
 def test_analyze_response_brand_and_competitors():
@@ -16,5 +16,16 @@ def test_analyze_response_brand_and_competitors():
 
 
 def test_composite_score_bounds():
-    s = composite_score(0.6, brand_mentions=5, total=10)
+    s = composite_score(
+        brand_mentioned=True,
+        mention_position="first_mentioned",
+        sentiment="positive",
+        cited_domains=[{"domain": "example.com"}],
+    )
     assert 0 <= s <= 100
+    assert s == round(query_geo_score(
+        brand_mentioned=True,
+        mention_position="first_mentioned",
+        sentiment="positive",
+        cited_domains=[{"domain": "example.com"}],
+    ) * 100.0, 2)

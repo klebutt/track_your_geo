@@ -41,6 +41,9 @@ class QueryResultOut(BaseModel):
     model_name: str = ""
     latency_ms: float
     cost_usd: float
+    sentiment: str = "neutral"
+    mention_position: str = "not_mentioned"
+    relevance_score: float = 0.0
 
     @field_validator("cited_domains", mode="before")
     @classmethod

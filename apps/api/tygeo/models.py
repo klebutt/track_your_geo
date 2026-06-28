@@ -50,6 +50,9 @@ class QueryResult(Base):
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    sentiment: Mapped[str] = mapped_column(String(32), default="neutral")
+    mention_position: Mapped[str] = mapped_column(String(32), default="not_mentioned")
+    relevance_score: Mapped[float] = mapped_column(Float, default=0.0)
 
     run: Mapped["Run"] = relationship(back_populates="query_results")
 

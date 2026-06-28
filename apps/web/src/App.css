@@ -184,6 +184,21 @@ tr.miss td {
   color: #991b1b;
 }
 
+.badge.sentiment-positive {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.badge.sentiment-neutral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.badge.sentiment-negative {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .rec {
   border-left: 3px solid #0d9488;
   padding-left: 0.75rem;

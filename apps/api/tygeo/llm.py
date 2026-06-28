@@ -10,6 +10,10 @@ from litellm import completion_cost
 
 from tygeo.config import Settings
 
+EXTRACTION_MODEL = "gpt-4o-mini"
+VALID_SENTIMENTS = frozenset({"positive", "neutral", "negative"})
+VALID_POSITIONS = frozenset({"first_mentioned", "secondary", "not_mentioned"})
+
 
 def _parse_cost_usd(raw: object) -> float:
     """Normalize LiteLLM completion_cost output (float or cost breakdown dict)."""
@@ -52,6 +56,98 @@ def _extract_json_array(text: str) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             pass
     return []
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    text = text.strip()
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+    except json.JSONDecodeError:
+        pass
+    m = re.search(r"\{[\s\S]*\}", text)
+    if m:
+        try:
+            data = json.loads(m.group())
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+
+def normalize_extraction(raw: dict[str, Any]) -> dict[str, Any]:
+    sentiment = str(raw.get("sentiment", "neutral")).lower().strip()
+    if sentiment not in VALID_SENTIMENTS:
+        sentiment = "neutral"
+
+    position_raw = raw.get("position", raw.get("mention_position", "not_mentioned"))
+    position = str(position_raw).lower().strip()
+    if position not in VALID_POSITIONS:
+        position = "not_mentioned"
+
+    relevance_raw = raw.get("relevance", raw.get("relevance_score", 0.0))
+    try:
+        relevance = max(0.0, min(1.0, float(relevance_raw)))
+    except (TypeError, ValueError):
+        relevance = 0.0
+
+    return {
+        "sentiment": sentiment,
+        "position": position,
+        "relevance": relevance,
+    }
+
+
+def extract_mention_details(
+    settings: Settings,
+    answer_text: str,
+    brand_name: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Extract sentiment, position, and relevance for a visible brand mention."""
+    if settings.openai_api_key:
+        litellm.api_key = settings.openai_api_key
+
+    prompt = (
+        f"Analyze the following AI response for mentions of the brand '{brand_name}'.\n"
+        "Return a JSON object with:\n"
+        "- 'sentiment': one of [positive, neutral, negative]\n"
+        "- 'position': one of [first_mentioned, secondary, not_mentioned]\n"
+        "- 'relevance': a score from 0.0 to 1.0 reflecting how prominently the brand is featured.\n\n"
+        f"Response:\n{answer_text}"
+    )
+    messages = [
+        {
+            "role": "system",
+            "content": "You extract structured brand-mention metadata. Reply with JSON only.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+
+    t0 = time.perf_counter()
+    response = litellm.completion(
+        model=EXTRACTION_MODEL,
+        messages=messages,
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    latency_ms = (time.perf_counter() - t0) * 1000
+    choice = response.choices[0]
+    text = choice.message.content or ""
+    pt, ct = _usage_tokens(response)
+    cost = _completion_cost_usd(response)
+
+    extracted = normalize_extraction(_extract_json_object(text))
+    meta = {
+        "phase": "extraction",
+        "model": EXTRACTION_MODEL,
+        "latency_ms": latency_ms,
+        "prompt_tokens": pt,
+        "completion_tokens": ct,
+        "cost_usd": cost,
+    }
+    return extracted, meta
 
 
 def _usage_tokens(response: Any) -> tuple[int, int]:

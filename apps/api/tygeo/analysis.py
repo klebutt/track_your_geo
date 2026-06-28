@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from tygeo.citations import build_cited_domains
 from tygeo.config import Settings
-from tygeo.llm import run_geo_query_provider
+from tygeo.llm import extract_mention_details, run_geo_query_provider
 from tygeo.models import QueryResult, Run
 from tygeo.pilots import PilotProfile
 
@@ -30,13 +30,65 @@ def analyze_response(
     return brand_hit, comp
 
 
-def composite_score(visibility_rate: float, brand_mentions: int, total: int) -> float:
-    """v0.1: visibility dominates; small bump if majority of answers mention brand."""
-    if total <= 0:
+def composite_score(
+    *,
+    brand_mentioned: bool,
+    mention_position: str,
+    sentiment: str,
+    cited_domains: list | None,
+) -> float:
+    """Per-query GEO score on 0–100 scale."""
+    return round(query_geo_score(
+        brand_mentioned=brand_mentioned,
+        mention_position=mention_position,
+        sentiment=sentiment,
+        cited_domains=cited_domains,
+    ) * 100.0, 2)
+
+
+def position_score(mention_position: str) -> float:
+    return {"first_mentioned": 1.0, "secondary": 0.5}.get(mention_position, 0.0)
+
+
+def sentiment_score(sentiment: str) -> float:
+    return {"positive": 1.0, "neutral": 0.5, "negative": 0.0}.get(sentiment, 0.5)
+
+
+def citation_score(cited_domains: list | None) -> float:
+    n = len(cited_domains or [])
+    return min(1.0, n / 5.0)
+
+
+def query_geo_score(
+    *,
+    brand_mentioned: bool,
+    mention_position: str,
+    sentiment: str,
+    cited_domains: list | None,
+) -> float:
+    visibility = 1.0 if brand_mentioned else 0.0
+    return (
+        0.40 * visibility
+        + 0.30 * position_score(mention_position)
+        + 0.20 * sentiment_score(sentiment)
+        + 0.10 * citation_score(cited_domains)
+    )
+
+
+def aggregate_composite_score(rows: list[dict]) -> float:
+    """Mean per-query GEO score on 0–100 scale."""
+    if not rows:
         return 0.0
-    base = visibility_rate * 100.0
-    bonus = min(10.0, (brand_mentions / total) * 10.0)
-    return round(min(100.0, base * 0.85 + bonus), 2)
+    total = sum(
+        query_geo_score(
+            brand_mentioned=row["brand_mentioned"],
+            mention_position=row["mention_position"],
+            sentiment=row["sentiment"],
+            cited_domains=row.get("cited_domains"),
+        )
+        for row in rows
+    )
+    return round((total / len(rows)) * 100.0, 2)
 
 
 def _models_with_credentials(settings: Settings, models: list[str]) -> list[str]:
@@ -116,7 +168,7 @@ def execute_run(
         brand = run.brand_name
         location = run.location
 
-    results: list[tuple[str, str, bool, dict[str, bool], dict]] = []
+    results: list[dict] = []
 
     for q_template in pilot.queries:
         q = pilot.format_query(q_template, brand=brand, location=location)
@@ -157,6 +209,37 @@ def execute_run(
                 citation_urls=citation_urls,
                 gemini_response=gemini_response,
             )
+
+            if brand_hit:
+                try:
+                    extracted, ext_meta = extract_mention_details(settings, text, brand)
+                    usage_log.append({"phase": "extraction", "query": q, **ext_meta})
+                    ext_cost = float(ext_meta.get("cost_usd") or 0.0)
+                    total_cost += ext_cost
+                    total_pt += int(ext_meta.get("prompt_tokens") or 0)
+                    total_ct += int(ext_meta.get("completion_tokens") or 0)
+                    cost_usd += ext_cost
+                    sentiment = extracted["sentiment"]
+                    mention_position = extracted["position"]
+                    relevance_score = extracted["relevance"]
+                except Exception as exc:
+                    logger.exception("Extraction failed for model=%s query=%r", model, q)
+                    usage_log.append(
+                        {
+                            "phase": "extraction_error",
+                            "query": q,
+                            "model": model,
+                            "error": str(exc),
+                        }
+                    )
+                    sentiment = "neutral"
+                    mention_position = "secondary"
+                    relevance_score = 0.5
+            else:
+                sentiment = "neutral"
+                mention_position = "not_mentioned"
+                relevance_score = 0.0
+
             qr = QueryResult(
                 run_id=run.id,
                 query_text=q,
@@ -169,9 +252,19 @@ def execute_run(
                 cost_usd=cost_usd,
                 prompt_tokens=int(meta.get("prompt_tokens") or 0),
                 completion_tokens=int(meta.get("completion_tokens") or 0),
+                sentiment=sentiment,
+                mention_position=mention_position,
+                relevance_score=relevance_score,
             )
             db.add(qr)
-            results.append((q, text, brand_hit, comp, meta))
+            results.append(
+                {
+                    "brand_mentioned": brand_hit,
+                    "mention_position": mention_position,
+                    "sentiment": sentiment,
+                    "cited_domains": cited,
+                }
+            )
             db.commit()
 
     if not results:
@@ -181,15 +274,14 @@ def execute_run(
         raise RuntimeError("All probes failed — check API keys, quotas, and Railway logs.")
 
     n = len(results)
-    vis = sum(1 for _, _, hit, _, _ in results if hit) / n if n else 0.0
-    brand_mentions = sum(1 for _, _, hit, _, _ in results if hit)
+    vis = sum(1 for r in results if r["brand_mentioned"]) / n if n else 0.0
 
     run.status = "completed"
     run.total_cost_usd = total_cost
     run.total_prompt_tokens = total_pt
     run.total_completion_tokens = total_ct
     run.visibility_rate = vis
-    run.composite_score = composite_score(vis, brand_mentions, n)
+    run.composite_score = aggregate_composite_score(results)
     run.usage_log = usage_log
     db.commit()
     db.refresh(run)

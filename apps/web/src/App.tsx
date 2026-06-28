@@ -33,6 +33,20 @@ type QueryResult = {
   model_name: string
   latency_ms: number
   cost_usd: number
+  sentiment: string
+  mention_position: string
+  relevance_score: number
+}
+
+function formatSentiment(sentiment: string): string {
+  return sentiment.charAt(0).toUpperCase() + sentiment.slice(1)
+}
+
+function formatPosition(position: string): string {
+  if (position === 'first_mentioned') return 'First'
+  if (position === 'secondary') return 'Secondary'
+  if (position === 'not_mentioned') return '—'
+  return position
 }
 
 function CitedDomainChips({ cited }: { cited: CitedDomain[] | undefined }) {
@@ -444,6 +458,8 @@ function App() {
                 <thead>
                   <tr>
                     <th>Brand?</th>
+                    <th>Sentiment</th>
+                    <th>Position</th>
                     <th>Model</th>
                     <th>Query</th>
                     <th>Sources (domains)</th>
@@ -460,6 +476,15 @@ function App() {
                           {q.brand_mentioned ? 'Yes' : 'No'}
                         </span>
                       </td>
+                      <td>
+                        <span
+                          className={`badge sentiment-${q.sentiment ?? 'neutral'}`}
+                          title={`Relevance: ${(q.relevance_score ?? 0).toFixed(2)}`}
+                        >
+                          {formatSentiment(q.sentiment ?? 'neutral')}
+                        </span>
+                      </td>
+                      <td>{formatPosition(q.mention_position ?? 'not_mentioned')}</td>
                       <td className="mono" style={{ fontSize: '0.72rem', maxWidth: '120px' }}>
                         {q.model_name || '—'}
                       </td>
