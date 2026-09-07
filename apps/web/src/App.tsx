@@ -83,6 +83,7 @@ type RunListItem = {
   status: string
   visibility_rate: number
   total_cost_usd: number
+  source_url?: string | null
 }
 
 type Run = {
@@ -101,6 +102,15 @@ type Run = {
   query_results: QueryResult[]
   recommendations: Recommendation[]
   usage_log?: Array<{ phase?: string; model?: string; error?: string }> | null
+  source_url?: string | null
+  profile_snapshot?: {
+    brand_name?: string
+    aliases?: string[]
+    location?: string
+    url?: string
+    competitors?: string[]
+    queries?: string[]
+  } | null
 }
 
 function formatProbeTemplate(template: string, brand: string, location: string): string {
@@ -156,6 +166,7 @@ function App() {
   const [loadingPilots, setLoadingPilots] = useState(true)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [urlInput, setUrlInput] = useState('')
   const [run, setRun] = useState<Run | null>(null)
   const [runHistory, setRunHistory] = useState<RunListItem[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
@@ -237,10 +248,13 @@ function App() {
     }
   }, [pilotId])
 
+  // Only swap the active run when the demo brand changes — not when a URL run finishes
+  // (otherwise finishing Analyse URL reloads the dropdown pilot and hides URL results).
   useEffect(() => {
     if (!pilotId || running) return
     void loadRunHistory(pilotId, { setActiveRun: true })
-  }, [pilotId, running, loadRunHistory])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit `running`
+  }, [pilotId, loadRunHistory])
 
   const trendData = useMemo<TrendPoint[]>(
     () =>
@@ -294,6 +308,60 @@ function App() {
     }
   }
 
+  const onRunFromUrl = async () => {
+    const url = urlInput.trim()
+    if (!url) {
+      setError('Paste a website URL to analyse.')
+      return
+    }
+    setRunning(true)
+    setError(null)
+    setRun(null)
+    try {
+      const started = await fetchJson<Run>(`${API_BASE}/api/runs/from-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, vertical: 'accountants' }),
+      })
+      setRun(started)
+      if (started.status === 'running') {
+        const completed = await pollUntilRunComplete(API_BASE, started.id, setRun)
+        setRun(completed)
+        if (completed.pilot_id) {
+          await loadRunHistory(completed.pilot_id, { setActiveRun: false })
+        }
+      } else if (started.pilot_id) {
+        await loadRunHistory(started.pilot_id, { setActiveRun: false })
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'URL analysis failed')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const onShowLatestUrlRun = async () => {
+    setError(null)
+    try {
+      const list = await fetchJson<RunListItem[]>(`${API_BASE}/api/runs?limit=30`)
+      const latestUrl = list.find(
+        (r) => r.status === 'completed' && (r.source_url || r.pilot_id.startsWith('url-')),
+      )
+      if (!latestUrl) {
+        setError('No completed URL analysis found yet.')
+        return
+      }
+      const full = await fetchJson<Run>(`${API_BASE}/api/runs/${latestUrl.id}`)
+      setRun(full)
+      if (full.pilot_id) {
+        await loadRunHistory(full.pilot_id, { setActiveRun: false })
+      }
+      if (full.source_url) setUrlInput(full.source_url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load URL run')
+    }
+  }
+
   return (
     <div className="app">
       <header>
@@ -318,7 +386,48 @@ function App() {
       </div>
 
       <section className="panel">
-        <h2>1 · Demo brand and run</h2>
+        <h2>1 · Analyse from URL (accountants)</h2>
+        <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem' }}>
+          Paste a firm website. The API infers name, aliases, location, competitors, and intent
+          queries, then runs the usual GEO probes. No multi-field form.
+        </p>
+        <div className="grid two">
+          <div>
+            <label htmlFor="url-input">Website URL</label>
+            <input
+              id="url-input"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="https://www.example-accountants.co.uk"
+              disabled={running}
+            />
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void onRunFromUrl()}
+              disabled={running || !urlInput.trim()}
+            >
+              {running
+                ? `Analysing URL… (${run?.query_results?.length ?? 0} probes)`
+                : 'Analyse URL'}
+            </button>
+          </div>
+        </div>
+        <p style={{ marginBottom: 0, marginTop: '0.75rem' }}>
+          <button type="button" onClick={() => void onShowLatestUrlRun()} disabled={running}>
+            Show latest URL analysis
+          </button>
+          <span style={{ marginLeft: '0.75rem', color: '#64748b', fontSize: '0.85rem' }}>
+            Recovers a finished URL run without spending again
+          </span>
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>2 · Demo brand and run</h2>
         {loadingPilots ? (
           <p>Loading demo brands…</p>
         ) : pilots.length === 0 ? (
@@ -364,9 +473,25 @@ function App() {
       {run && (
         <>
           <section className="panel">
-            <h2>2 · Summary</h2>
+            <h2>3 · Summary</h2>
             <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem' }}>
               Last probe: <time dateTime={run.created_at}>{formatRunDateTime(run.created_at)}</time>
+              {run.source_url ? (
+                <>
+                  {' '}
+                  · Source:{' '}
+                  <a href={run.source_url} target="_blank" rel="noreferrer">
+                    {run.source_url}
+                  </a>
+                </>
+              ) : null}
+              {run.brand_name && run.brand_name !== '(inferring…)' ? (
+                <>
+                  {' '}
+                  · Inferred brand: <strong>{run.brand_name}</strong>
+                  {run.location ? ` (${run.location})` : ''}
+                </>
+              ) : null}
             </p>
             <div className="stats">
               <div className="stat">
@@ -410,7 +535,7 @@ function App() {
           </section>
 
           <section className="panel">
-            <h2>3 · Visibility trend</h2>
+            <h2>4 · Visibility trend</h2>
             <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem', maxWidth: '65ch' }}>
               Historical visibility rate across completed runs for this brand
               {loadingHistory ? ' (loading…)' : ''}.

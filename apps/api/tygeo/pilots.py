@@ -19,6 +19,10 @@ class PilotProfile(BaseModel):
     queries: list[str] = Field(default_factory=list)
     seed_domains: list[str] = Field(default_factory=list)
     brand_domains: list[str] = Field(default_factory=list)
+    url: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+    industry: str | None = None
+    services: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_yaml(cls, path: Path) -> PilotProfile:

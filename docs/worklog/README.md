@@ -2,5 +2,6 @@
 
 Session notes: decisions, shipped changes, and suggested follow-ups. New entries: add a dated file `YYYY-MM-DD.md`. Format and agent expectations: [AGENTS.md](../../AGENTS.md) (Collaboration workflow → Record).
 
+- [2026-09-07](2026-09-07-url-to-report.md) — URL → profile → report (`url-to-report`).
 - [2026-09-07](2026-09-07.md) — Cursor vs Obsidian ways of working; AGENTS + vault status aligned.
 - [2026-05-12](2026-05-12.md) — Hardcoded real demo brands, neutral probes, UI + analysis alignment, scoring realism doc.

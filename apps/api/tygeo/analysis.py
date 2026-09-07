@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 def _mentions(text: str, phrase: str) -> bool:
+    phrase = (phrase or "").strip()
+    if not phrase:
+        return False
     return phrase.lower() in text.lower()
 
 
@@ -22,8 +25,10 @@ def analyze_response(
     *,
     brand: str,
     competitors: list[str],
+    aliases: list[str] | None = None,
 ) -> tuple[bool, dict[str, bool]]:
-    brand_hit = _mentions(response_text, brand)
+    names = [brand, *(aliases or [])]
+    brand_hit = any(_mentions(response_text, name) for name in names)
     comp: dict[str, bool] = {}
     for c in competitors:
         comp[c] = _mentions(response_text, c)
@@ -278,7 +283,12 @@ def execute_run(
             total_pt += int(meta.get("prompt_tokens") or 0)
             total_ct += int(meta.get("completion_tokens") or 0)
 
-            brand_hit, comp = analyze_response(text, brand=brand, competitors=pilot.competitors)
+            brand_hit, comp = analyze_response(
+                text,
+                brand=brand,
+                competitors=pilot.competitors,
+                aliases=pilot.aliases,
+            )
             cited = build_cited_domains(
                 text,
                 annotations,
@@ -413,6 +423,90 @@ def execute_run(
     db.commit()
     db.refresh(run)
     return run
+
+
+def create_pending_url_run(
+    db: Session,
+    settings: Settings,
+    *,
+    url: str,
+) -> Run:
+    enabled_models = _models_with_credentials(settings, settings.enabled_probe_models)
+    if not enabled_models:
+        raise ValueError("No probe models available: check API keys and TYGEO_ENABLED_PROBES")
+    run = Run(
+        pilot_id="url-intake",
+        brand_name="(inferring…)",
+        location="",
+        model_name=",".join(enabled_models),
+        status="running",
+        source_url=url,
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return run
+
+
+def finish_url_run_probes(run_id: int, url: str, *, vertical: str) -> None:
+    """Background worker: infer profile from URL then execute probes."""
+    from tygeo.config import Settings as SettingsCls
+    from tygeo.db import new_session
+    from tygeo.url_intake import infer_pilot_from_url, normalize_url, pilot_snapshot
+
+    settings = SettingsCls()
+    db = new_session()
+    try:
+        run = db.query(Run).filter(Run.id == run_id).first()
+        if not run:
+            return
+        try:
+            normalized = normalize_url(url)
+            pilot, infer_usage = infer_pilot_from_url(
+                settings, normalized, vertical=vertical
+            )
+        except Exception as exc:
+            logger.exception("URL inference failed for run %s", run_id)
+            run.status = "failed"
+            run.usage_log = [{"phase": "profile_infer_error", "error": str(exc)}]
+            db.commit()
+            return
+
+        infer_cost = sum(float(e.get("cost_usd") or 0.0) for e in infer_usage)
+        infer_pt = sum(int(e.get("prompt_tokens") or 0) for e in infer_usage)
+        infer_ct = sum(int(e.get("completion_tokens") or 0) for e in infer_usage)
+
+        run.pilot_id = pilot.id
+        run.brand_name = pilot.brand_name
+        run.location = pilot.location
+        run.source_url = pilot.url or normalized
+        run.profile_snapshot = pilot_snapshot(pilot)
+        db.commit()
+
+        execute_run(
+            db,
+            settings,
+            pilot,
+            brand_override=None,
+            location_override=None,
+            run=run,
+        )
+        db.refresh(run)
+        probe_log = list(run.usage_log or [])
+        run.usage_log = infer_usage + probe_log
+        run.total_cost_usd = float(run.total_cost_usd or 0.0) + infer_cost
+        run.total_prompt_tokens = int(run.total_prompt_tokens or 0) + infer_pt
+        run.total_completion_tokens = int(run.total_completion_tokens or 0) + infer_ct
+        db.commit()
+    except Exception:
+        logger.exception("Background URL run %s failed", run_id)
+        db.rollback()
+        run = db.query(Run).filter(Run.id == run_id).first()
+        if run and run.status == "running":
+            run.status = "failed"
+            db.commit()
+    finally:
+        db.close()
 
 
 def finish_run_probes(

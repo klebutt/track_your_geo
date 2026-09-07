@@ -5,12 +5,13 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
-from tygeo.analysis import create_pending_run, finish_run_probes
+from tygeo.analysis import create_pending_run, create_pending_url_run, finish_run_probes, finish_url_run_probes
 from tygeo.config import Settings
 from tygeo.db import get_session, init_db
 from tygeo.models import Run
 from tygeo.pilots import list_pilots, load_pilot
-from tygeo.schemas import PilotDetail, PilotSummary, RunCreate, RunListItem, RunOut
+from tygeo.schemas import PilotDetail, PilotSummary, RunCreate, RunFromUrlCreate, RunListItem, RunOut
+from tygeo.url_intake import SUPPORTED_VERTICALS, normalize_url
 
 
 def get_settings() -> Settings:
@@ -107,6 +108,38 @@ def api_create_run(
         brand_override=body.brand_name,
         location_override=body.location,
     )
+    return _load_run(db, run.id)
+
+
+@app.post("/api/runs/from-url", response_model=RunOut)
+def api_create_run_from_url(
+    body: RunFromUrlCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(db_session),
+    settings: Settings = Depends(get_settings),
+):
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="OPENAI_API_KEY is not set. Copy .env.example to .env and add your key.",
+        )
+    vertical = (body.vertical or "accountants").strip().lower()
+    if vertical not in SUPPORTED_VERTICALS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported vertical {body.vertical!r}. Supported: {sorted(SUPPORTED_VERTICALS)}",
+        )
+    try:
+        url = normalize_url(body.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        run = create_pending_url_run(db, settings, url=url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    background_tasks.add_task(finish_url_run_probes, run.id, url, vertical=vertical)
     return _load_run(db, run.id)
 
 

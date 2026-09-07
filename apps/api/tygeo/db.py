@@ -24,28 +24,37 @@ def _migrate_sqlite(engine) -> None:
     if engine.dialect.name != "sqlite":
         return
     insp = inspect(engine)
-    if "query_results" not in insp.get_table_names():
-        return
-    cols = {c["name"] for c in insp.get_columns("query_results")}
+    tables = set(insp.get_table_names())
     migrations: list[str] = []
-    if "cited_domains" not in cols:
-        migrations.append("ALTER TABLE query_results ADD COLUMN cited_domains JSON")
-    if "model_name" not in cols:
-        migrations.append(
-            "ALTER TABLE query_results ADD COLUMN model_name VARCHAR(256) DEFAULT ''"
-        )
-    if "sentiment" not in cols:
-        migrations.append(
-            "ALTER TABLE query_results ADD COLUMN sentiment VARCHAR(32) DEFAULT 'neutral'"
-        )
-    if "mention_position" not in cols:
-        migrations.append(
-            "ALTER TABLE query_results ADD COLUMN mention_position VARCHAR(32) DEFAULT 'not_mentioned'"
-        )
-    if "relevance_score" not in cols:
-        migrations.append(
-            "ALTER TABLE query_results ADD COLUMN relevance_score FLOAT DEFAULT 0.0"
-        )
+
+    if "query_results" in tables:
+        cols = {c["name"] for c in insp.get_columns("query_results")}
+        if "cited_domains" not in cols:
+            migrations.append("ALTER TABLE query_results ADD COLUMN cited_domains JSON")
+        if "model_name" not in cols:
+            migrations.append(
+                "ALTER TABLE query_results ADD COLUMN model_name VARCHAR(256) DEFAULT ''"
+            )
+        if "sentiment" not in cols:
+            migrations.append(
+                "ALTER TABLE query_results ADD COLUMN sentiment VARCHAR(32) DEFAULT 'neutral'"
+            )
+        if "mention_position" not in cols:
+            migrations.append(
+                "ALTER TABLE query_results ADD COLUMN mention_position VARCHAR(32) DEFAULT 'not_mentioned'"
+            )
+        if "relevance_score" not in cols:
+            migrations.append(
+                "ALTER TABLE query_results ADD COLUMN relevance_score FLOAT DEFAULT 0.0"
+            )
+
+    if "runs" in tables:
+        run_cols = {c["name"] for c in insp.get_columns("runs")}
+        if "source_url" not in run_cols:
+            migrations.append("ALTER TABLE runs ADD COLUMN source_url VARCHAR(2048)")
+        if "profile_snapshot" not in run_cols:
+            migrations.append("ALTER TABLE runs ADD COLUMN profile_snapshot JSON")
+
     for stmt in migrations:
         with engine.begin() as conn:
             conn.execute(text(stmt))

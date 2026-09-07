@@ -15,6 +15,28 @@ def test_analyze_response_brand_and_competitors():
     assert comps["LexisNexis"] is False
 
 
+def test_analyze_response_alias_hit():
+    text = "Many founders recommend Riverside Acc for payroll."
+    brand_hit, _ = analyze_response(
+        text,
+        brand="Riverside Accountants",
+        competitors=[],
+        aliases=["Riverside Acc", "Riverside Accountancy"],
+    )
+    assert brand_hit is True
+
+
+def test_analyze_response_alias_miss():
+    text = "Clio is popular among law firms."
+    brand_hit, _ = analyze_response(
+        text,
+        brand="Riverside Accountants",
+        competitors=["Clio"],
+        aliases=["Riverside Acc"],
+    )
+    assert brand_hit is False
+
+
 def test_composite_score_bounds():
     s = composite_score(
         brand_mentioned=True,

@@ -31,6 +31,11 @@ class RunCreate(BaseModel):
     location: str | None = None
 
 
+class RunFromUrlCreate(BaseModel):
+    url: str
+    vertical: str = "accountants"
+
+
 class QueryResultOut(BaseModel):
     id: int
     query_text: str
@@ -79,6 +84,8 @@ class RunOut(BaseModel):
     query_results: list[QueryResultOut]
     recommendations: list[RecommendationOut]
     usage_log: list[dict[str, Any]] | None = None
+    source_url: str | None = None
+    profile_snapshot: dict[str, Any] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -91,5 +98,6 @@ class RunListItem(BaseModel):
     status: str
     visibility_rate: float
     total_cost_usd: float
+    source_url: str | None = None
 
     model_config = {"from_attributes": True}

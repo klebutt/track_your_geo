@@ -1,0 +1,25 @@
+id: gold-harbour-tax
+brand_name: Harbour Tax Advisors
+url: https://www.harbourtax.example
+location: Bristol, UK
+industry: accountants
+aliases:
+  - Harbour Tax
+  - Harbour Tax Advisers
+services:
+  - corporation tax
+  - VAT
+  - payroll
+competitors:
+  - Azets
+  - Bishop Fleming
+  - Milsted Langdon
+queries:
+  - What are the best accountants for a small business in {location}? Name specific firms.
+  - Best accountant for contractors and freelancers in {location} — list firms by name.
+  - Affordable accountant for a startup in {location}; recommend specific practices.
+  - Best-rated independent accountant near {location}; name actual firms.
+  - Who are good accountants in {location} for limited companies? List specific names.
+brand_domains:
+  - harbourtax.example
+seed_domains: []

@@ -68,12 +68,13 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 ## Current focus (update by humans; keep in sync with vault `status.md`)
 
-- **Active change:** _(none)_
+- **Active change:** [url-to-report](openspec/changes/url-to-report/) — implemented; continue local testing, then archive
 - **Priorities (in order):**
-  1. Next smallest build toward SME validation / Phase 0–1 per vault `next-development-phases.md` (not a full GEO-platform rebuild)
-  2. Scoring realism / calibration options when touching probe/score/UI ([docs/geo-scoring-realism.md](docs/geo-scoring-realism.md))
+  1. Continue URL→report testing (more accountant URLs; recover via “Show latest URL analysis”)
+  2. Optional prod deploy of url-to-report
+  3. Sprint 2: competitor/alias enrich hardening, plain-language report, cost caps
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
-- **Context:** Engine shipped through recommendations v1 (see [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md)). Strategic direction lives in the vault, not only this file.
+- **Context:** Local smoke `https://mpathyaccounting.co.uk/` → Mpathy Accounting ~90% visibility. See [docs/worklog/2026-09-07-url-to-report.md](docs/worklog/2026-09-07-url-to-report.md).
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

@@ -1,0 +1,25 @@
+id: gold-riverside-accountants
+brand_name: Riverside Accountants
+url: https://www.riverside-accountants.example
+location: Manchester, UK
+industry: accountants
+aliases:
+  - Riverside Accountancy
+  - Riverside Acc
+services:
+  - tax
+  - bookkeeping
+  - limited company accounts
+competitors:
+  - Beever and Struthers
+  - DJH Mitten Clarke
+  - Xeinadin
+queries:
+  - What are the best accountants for a small business in {location}? Name specific firms.
+  - Best accountant for contractors and freelancers in {location} — list firms by name.
+  - Affordable accountant for a startup in {location}; recommend specific practices.
+  - Accountant specialising in property businesses near {location} — who should I consider?
+  - Best-rated independent accountant near {location}; name actual firms.
+brand_domains:
+  - riverside-accountants.example
+seed_domains: []

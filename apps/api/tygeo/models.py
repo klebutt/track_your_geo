@@ -22,6 +22,8 @@ class Run(Base):
     visibility_rate: Mapped[float] = mapped_column(Float, default=0.0)
     composite_score: Mapped[float] = mapped_column(Float, default=0.0)
     usage_log: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    profile_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     query_results: Mapped[list["QueryResult"]] = relationship(
         back_populates="run",

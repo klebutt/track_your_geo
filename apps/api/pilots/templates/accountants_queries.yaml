@@ -1,0 +1,12 @@
+# Brand-neutral accountant intent templates. Use {location}; optional {service}.
+queries:
+  - What are the best accountants for a small business in {location}? Name specific firms.
+  - Best accountant for contractors and freelancers in {location} — list firms by name.
+  - Affordable accountant for a startup in {location}; recommend specific practices.
+  - Accountant specialising in property businesses near {location} — who should I consider?
+  - Best-rated independent accountant near {location}; name actual firms.
+  - Who are good accountants in {location} for limited companies? List specific names.
+  - Recommended bookkeeping and tax accountants in {location} for SMEs — name firms.
+  - Best accountant in {location} for restaurants or hospitality businesses; name options.
+  - Which accountants in {location} are strong on Making Tax Digital / digital accounting?
+  - Top local accountants in {location} for first-time limited company directors — name firms.
