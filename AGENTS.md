@@ -1,16 +1,20 @@
 # Agent context
 
-Track Your GEO: local MVP for GEO visibility probing. Agents collaborate with humans via **orient → plan (approve) → implement → validate → worklog**.
+Track Your GEO: deployed MVP for GEO visibility probing. Agents collaborate with humans via **orient → plan (approve) → implement → validate → worklog**.
+
+## Cursor vs Obsidian
+
+This **repo** is the build system (code, OpenSpec, worklogs, formula). The **Obsidian vault** is the thinking system (strategy, personas, session status). Do not copy OpenSpec, formula, or worklogs into the vault. Full split: [docs/ways-of-working.md](docs/ways-of-working.md). Vault path: `G:\My Drive\Obsidian\projects\track-your-geo\` (start at `status.md`).
 
 ## Collaboration workflow
 
-1. **Orient** — Latest [docs/worklog/](docs/worklog/) entry; active [openspec/changes/](openspec/changes/); relevant [openspec/specs/](openspec/specs/).
+1. **Orient** — Vault `status.md` (session goal) if accessible; latest [docs/worklog/](docs/worklog/); active [openspec/changes/](openspec/changes/); relevant [openspec/specs/](openspec/specs/).
 2. **Clarify** — Restate objective, scope, out-of-scope; ask if unclear.
 3. **Plan** — Post a **Plan (awaiting approval)** block (template below). **Do not change product code until the human approves**, except trivial fixes they delegated in the same message.
 4. **Spec** — Non-trivial work: OpenSpec propose/explore/apply skills (see `.cursor/skills/openspec-*`). Trivial fixes: skip new change folder.
 5. **Implement** — Small, reviewable diffs; follow approved plan and task list.
 6. **Validate** — `pytest eval -q`; manual UI smoke if UI/API touched; note LLM cost impact.
-7. **Record** — Update [docs/worklog/](docs/worklog/); archive OpenSpec change when done.
+7. **Record** — Update [docs/worklog/](docs/worklog/); archive OpenSpec change when done. Remind the human to refresh vault `status.md` if the session goal or live state changed.
 
 ### Plan (awaiting approval) template
 
@@ -53,20 +57,23 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 | Topic | Location |
 |--------|----------|
+| Ways of working | [docs/ways-of-working.md](docs/ways-of-working.md) |
 | Product intent | [product_brief.md](product_brief.md) |
 | Scoring realism | [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) |
 | Composite score formula | [apps/api/docs/geo-scoring-formula.md](apps/api/docs/geo-scoring-formula.md) |
 | Session history | [docs/worklog/](docs/worklog/) |
 | Behavior specs | [openspec/specs/](openspec/specs/) |
 | Active proposals | [openspec/changes/](openspec/changes/) |
+| Session / strategy (vault) | `G:\My Drive\Obsidian\projects\track-your-geo\status.md` |
 
-## Current focus (update by humans)
+## Current focus (update by humans; keep in sync with vault `status.md`)
 
 - **Active change:** _(none)_
 - **Priorities (in order):**
-  1. Calibration panel vs consumer ChatGPT (see [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md))
+  1. Next smallest build toward SME validation / Phase 0–1 per vault `next-development-phases.md` (not a full GEO-platform rebuild)
+  2. Scoring realism / calibration options when touching probe/score/UI ([docs/geo-scoring-realism.md](docs/geo-scoring-realism.md))
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
-- **Context:** See [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md) — multi-LLM, YAML pilots, async runs, dashboard history, structured extraction, **recommendations engine v1** (insights section + enriched advice) verified in prod.
+- **Context:** Engine shipped through recommendations v1 (see [docs/worklog/2026-06-28.md](docs/worklog/2026-06-28.md)). Strategic direction lives in the vault, not only this file.
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.
