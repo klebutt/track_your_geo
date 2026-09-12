@@ -23,6 +23,7 @@ class PilotProfile(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     industry: str | None = None
     services: list[str] = Field(default_factory=list)
+    location_raw: str | None = None
 
     @classmethod
     def from_yaml(cls, path: Path) -> PilotProfile:

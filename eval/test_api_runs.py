@@ -15,7 +15,7 @@ from tygeo.models import Run
 
 def test_post_run_returns_running_before_probes_finish(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("TYGEO_ENABLED_PROBES", "gpt-4o-mini-search-preview")
+    monkeypatch.setenv("TYGEO_ENABLED_PROBES", "gpt-5-search-api")
     db_path = tmp_path / "test.db"
     init_db(f"sqlite:///{db_path}")
 
@@ -123,7 +123,7 @@ def test_list_runs_filters_by_pilot_id(tmp_path, monkeypatch):
 
 def test_post_run_from_url_rejects_bad_vertical(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("TYGEO_ENABLED_PROBES", "gpt-4o-mini-search-preview")
+    monkeypatch.setenv("TYGEO_ENABLED_PROBES", "gpt-5-search-api")
     db_path = tmp_path / "test.db"
     init_db(f"sqlite:///{db_path}")
     client = TestClient(app)
@@ -136,7 +136,7 @@ def test_post_run_from_url_rejects_bad_vertical(tmp_path, monkeypatch):
 
 def test_post_run_from_url_infers_then_probes(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("TYGEO_ENABLED_PROBES", "gpt-4o-mini-search-preview")
+    monkeypatch.setenv("TYGEO_ENABLED_PROBES", "gpt-5-search-api")
     db_path = tmp_path / "test.db"
     init_db(f"sqlite:///{db_path}")
 

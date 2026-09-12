@@ -215,12 +215,12 @@ Production layout: **Vercel** serves the static React app; the browser calls **R
 | `OPENAI_API_KEY` | Railway | Your OpenAI API key |
 | `PERPLEXITY_API_KEY` | Railway | Perplexity API key (for `perplexity/sonar-pro`) |
 | `GEMINI_API_KEY` | Railway | Google AI Studio key (for `gemini/gemini-2.5-flash`) |
-| `TYGEO_ENABLED_PROBES` | Railway | `gpt-4o-mini-search-preview,perplexity/sonar-pro,gemini/gemini-2.5-flash` |
+| `TYGEO_ENABLED_PROBES` | Railway | `gpt-5-search-api,perplexity/sonar-pro,gemini/gemini-2.5-flash` |
 | `TYGEO_PILOT_DIR` | Railway | `pilots` (relative to `apps/api`; ships with the repo) |
 | `TYGEO_ALLOWED_ORIGINS` | Railway | `https://track-your-geo.vercel.app` |
 | `TYGEO_DATABASE_URL` | Railway | `sqlite:////data/tygeo.db` |
 | `TYGEO_MODEL` | Railway | `gpt-4o-mini` (default) |
-| `TYGEO_PROBE_MODEL` | Railway | `gpt-4o-mini-search-preview` (legacy single-model fallback) |
+| `TYGEO_PROBE_MODEL` | Railway | `gpt-5-search-api` (legacy single-model fallback) |
 | `VITE_API_URL` | Vercel | `https://trackyourgeo-production.up.railway.app` |
 
 Locally, leave `VITE_API_URL` unset so the Vite dev proxy handles `/api` requests.
@@ -232,7 +232,7 @@ With all three default models enabled, each demo pilot issues **30 sequential pr
 **Gemini free tier** (`gemini-2.5-flash` via Google AI Studio) has low per-minute request limits. On production we routinely see **partial runs**: OpenAI and Perplexity succeed; Gemini rows missing with `probe_error` in `usage_log`. Options:
 
 - Enable **paid Gemini billing** when ready for full 3-model coverage.
-- Temporarily set `TYGEO_ENABLED_PROBES=gpt-4o-mini-search-preview,perplexity/sonar-pro` on Railway.
+- Temporarily set `TYGEO_ENABLED_PROBES=gpt-5-search-api,perplexity/sonar-pro` on Railway.
 
 ### Railway (backend)
 

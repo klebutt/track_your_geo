@@ -193,16 +193,38 @@ def enrich_profile_from_url(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     host = urlparse(url).netloc
     partial = partial or {}
+    brand = str(partial.get("brand_name") or "").strip()
+    location = str(partial.get("location") or "").strip()
     user = (
         f"Infer a UK-focused {vertical} business profile from this website URL/domain.\n"
         f"URL: {url}\nHost: {host}\n"
         f"Partial extract (may be empty): {partial}\n\n"
-        "Return JSON with: brand_name, aliases, location, services, competitors, "
-        "description, brand_domains. Prefer plausible best-effort values over empty brand_name."
+        "Return JSON with keys:\n"
+        "- brand_name (string)\n"
+        "- aliases (array of strings: trading names, short names, 'Name Ltd' variants — not the primary brand_name)\n"
+        "- location (string: prefer a single primary city/town + region/country)\n"
+        "- services (array of short strings)\n"
+        "- competitors (array of real firm names)\n"
+        "- description (short string)\n"
+        "- brand_domains (array of domains owned by the brand if obvious)\n\n"
+        "Competitor rules:\n"
+        "- Prefer local/regional rivals in the same vertical near the inferred location; "
+        "then well-known national alternatives if needed.\n"
+        "- Use plausible real firm names only; do not invent fake practices.\n"
+        "- Exclude the brand itself and obvious aliases of the brand"
+        + (f" (brand: {brand})" if brand else "")
+        + ".\n"
+        "- Return 3–8 competitors when possible; empty array only if truly unknown.\n\n"
+        "Do not invent fake UK street addresses or phone numbers. "
+        "Prefer plausible best-effort brand_name/location over leaving them empty."
+        + (f"\nKnown location hint: {location}" if location else "")
     )
     return _llm_json(
         settings,
-        system="You infer SME business profiles from URLs. Reply with JSON only. Do not invent fake UK street addresses.",
+        system=(
+            "You infer SME business profiles from URLs for GEO competitor analysis. "
+            "Reply with JSON only. Competitors must be other firms, never the target brand."
+        ),
         user=user,
         phase="profile_enrich",
     )
@@ -233,6 +255,70 @@ def generate_aliases(brand_name: str, aliases: list[str]) -> list[str]:
             merged.append(stripped)
     # Drop primary brand from aliases list (kept separately on profile)
     return [a for a in merged if a.lower() != brand_name.strip().lower()]
+
+
+_COUNTRY_LIKE = frozenset(
+    {
+        "uk",
+        "u.k.",
+        "u.k",
+        "united kingdom",
+        "england",
+        "scotland",
+        "wales",
+        "northern ireland",
+        "gb",
+        "great britain",
+    }
+)
+
+
+def primary_location(location: str) -> tuple[str, str | None]:
+    """Return (primary_location, location_raw_or_None).
+
+    Multi-office strings like \"Bristol, Bath, Yeovil, London, UK\" become \"Bristol, UK\".
+    Short strings like \"Manchester, UK\" are left unchanged (raw is None).
+    """
+    raw = (location or "").strip()
+    if not raw:
+        return "UK", None
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if len(parts) <= 2:
+        return raw, None
+    first = parts[0]
+    last = parts[-1]
+    if last.lower() in _COUNTRY_LIKE:
+        primary = f"{first}, {last}"
+    else:
+        primary = first
+    if primary.lower() == raw.lower():
+        return raw, None
+    return primary, raw
+
+
+def _filter_competitors(competitors: list[str], *, brand_name: str, aliases: list[str]) -> list[str]:
+    blocked = {brand_name.strip().lower(), *(a.strip().lower() for a in aliases if a.strip())}
+    out: list[str] = []
+    for name in competitors:
+        n = name.strip()
+        if not n or n.lower() in blocked:
+            continue
+        if n not in out:
+            out.append(n)
+    return out[:8]
+
+
+def _merge_profile_dicts(base: dict[str, Any], enrich: dict[str, Any]) -> dict[str, Any]:
+    """Keep non-empty base fields; fill gaps from enrich (lists merge when base list empty)."""
+    merged = dict(base)
+    for key, value in enrich.items():
+        if key in {"competitors", "aliases", "services", "brand_domains"}:
+            if not _as_str_list(merged.get(key)):
+                merged[key] = value
+            continue
+        if not str(merged.get(key) or "").strip():
+            merged[key] = value
+    return merged
 
 
 def load_accountant_query_templates(pilot_dir: Path) -> list[str]:
@@ -274,6 +360,7 @@ def profile_dict_to_pilot(
     url: str,
     vertical: str,
     queries: list[str],
+    location_raw: str | None = None,
 ) -> PilotProfile:
     brand = str(data.get("brand_name") or "").strip()
     if not brand:
@@ -284,18 +371,24 @@ def profile_dict_to_pilot(
     domains = _as_str_list(data.get("brand_domains"))
     if host and host not in domains:
         domains = [host, *domains]
+    competitors = _filter_competitors(
+        _as_str_list(data.get("competitors")),
+        brand_name=brand,
+        aliases=aliases,
+    )
     slug = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
     return PilotProfile(
         id=f"url-{slug}",
         brand_name=brand,
         location=location,
-        competitors=_as_str_list(data.get("competitors"))[:8],
+        competitors=competitors,
         queries=queries,
         brand_domains=domains,
         url=url,
         aliases=aliases,
         industry=vertical,
         services=_as_str_list(data.get("services")),
+        location_raw=location_raw,
     )
 
 
@@ -325,34 +418,46 @@ def infer_pilot_from_url(
 
     brand = str(extracted.get("brand_name") or "").strip()
     location = str(extracted.get("location") or "").strip()
-    need_enrich = not brand or not location or len(page_text) < MIN_USEFUL_TEXT
-    if need_enrich:
+    aliases_so_far = generate_aliases(brand, _as_str_list(extracted.get("aliases"))) if brand else []
+    competitors_so_far = _as_str_list(extracted.get("competitors"))
+    need_core_enrich = not brand or not location or len(page_text) < MIN_USEFUL_TEXT
+    need_gap_enrich = bool(brand and location) and (
+        not competitors_so_far or not aliases_so_far
+    )
+    if need_core_enrich or need_gap_enrich:
         enriched, enrich_meta = enrich_profile_from_url(
             settings, url=url, vertical=vertical, partial=extracted
         )
         usage.append(enrich_meta)
-        # Prefer non-empty extracted fields; fill gaps from enrich
-        merged = {**enriched, **{k: v for k, v in extracted.items() if v}}
-        if not str(merged.get("brand_name") or "").strip():
-            merged["brand_name"] = enriched.get("brand_name")
-        if not str(merged.get("location") or "").strip():
-            merged["location"] = enriched.get("location")
-        extracted = merged
+        extracted = _merge_profile_dicts(extracted, enriched)
+        if not str(extracted.get("brand_name") or "").strip():
+            extracted["brand_name"] = enriched.get("brand_name")
+        if not str(extracted.get("location") or "").strip():
+            extracted["location"] = enriched.get("location")
+
+    loc_primary, loc_raw = primary_location(str(extracted.get("location") or ""))
+    extracted["location"] = loc_primary
 
     templates = load_accountant_query_templates(settings.pilot_dir_path)
     queries = build_queries_from_templates(
         templates,
-        location=str(extracted.get("location") or ""),
+        location=loc_primary,
         services=_as_str_list(extracted.get("services")),
     )
     usage.append({"phase": "query_gen", "query_count": len(queries), "cost_usd": 0.0})
 
-    pilot = profile_dict_to_pilot(extracted, url=url, vertical=vertical, queries=queries)
+    pilot = profile_dict_to_pilot(
+        extracted,
+        url=url,
+        vertical=vertical,
+        queries=queries,
+        location_raw=loc_raw,
+    )
     return pilot, usage
 
 
 def pilot_snapshot(pilot: PilotProfile) -> dict[str, Any]:
-    return {
+    snap: dict[str, Any] = {
         "id": pilot.id,
         "brand_name": pilot.brand_name,
         "location": pilot.location,
@@ -364,3 +469,6 @@ def pilot_snapshot(pilot: PilotProfile) -> dict[str, Any]:
         "industry": pilot.industry,
         "brand_domains": list(pilot.brand_domains),
     }
+    if pilot.location_raw:
+        snap["location_raw"] = pilot.location_raw
+    return snap

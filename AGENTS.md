@@ -68,13 +68,15 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 ## Current focus (update by humans; keep in sync with vault `status.md`)
 
-- **Active change:** [url-to-report](openspec/changes/url-to-report/) — implemented; continue local testing, then archive
+- **Active change:** [plain-language-report](openspec/changes/plain-language-report/) — implemented; archive next
 - **Priorities (in order):**
-  1. Continue URL→report testing (more accountant URLs; recover via “Show latest URL analysis”)
-  2. Optional prod deploy of url-to-report
-  3. Sprint 2: competitor/alias enrich hardening, plain-language report, cost caps
+  1. Lock locality-aware query open questions (see EOD worklog)
+  2. Archive `plain-language-report`
+  3. Propose + implement locality-aware accountant queries (stance infer, local vs UK-wide mix, local competitors)
+  4. Top 10 vault prospects via **local** URL→report (do not copy prospect list into git)
+  5. Railway/prod parked until WTP validated
 
-- **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app
-- **Context:** Local smoke `https://mpathyaccounting.co.uk/` → Mpathy Accounting ~90% visibility. See [docs/worklog/2026-09-07-url-to-report.md](docs/worklog/2026-09-07-url-to-report.md).
+- **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app (prod not required)
+- **Context:** EOD [docs/worklog/2026-09-12-eod.md](docs/worklog/2026-09-12-eod.md). Vault `status.md` + `accountant-prospects.md`.
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

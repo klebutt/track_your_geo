@@ -86,6 +86,17 @@ type RunListItem = {
   source_url?: string | null
 }
 
+type PlainReport = {
+  ready: boolean
+  searches_recommended: number
+  searches_total: number
+  headline: string
+  win_queries: string[]
+  loss_queries: string[]
+  gap_summary?: string | null
+  models_note?: string | null
+}
+
 type Run = {
   id: number
   created_at: string
@@ -111,6 +122,7 @@ type Run = {
     competitors?: string[]
     queries?: string[]
   } | null
+  plain_report?: PlainReport | null
 }
 
 function formatProbeTemplate(template: string, brand: string, location: string): string {
@@ -472,6 +484,54 @@ function App() {
 
       {run && (
         <>
+          {run.plain_report?.ready ? (
+            <section className="panel plain-report">
+              <h2>Your AI recommendation report</h2>
+              <p className="plain-report-headline">{run.plain_report.headline}</p>
+              <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.95rem', maxWidth: '65ch' }}>
+                That is {run.plain_report.searches_recommended} of {run.plain_report.searches_total}{' '}
+                customer-intent questions where at least one AI reply named{' '}
+                <strong>{run.brand_name}</strong>.
+              </p>
+              {run.plain_report.gap_summary ? (
+                <p style={{ maxWidth: '65ch' }}>{run.plain_report.gap_summary}</p>
+              ) : null}
+              <div className="plain-report-columns">
+                <div>
+                  <h3 className="insights-subheading">Where you appeared</h3>
+                  {run.plain_report.win_queries.length > 0 ? (
+                    <ul className="plain-report-list">
+                      {run.plain_report.win_queries.map((q) => (
+                        <li key={q}>{q}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p style={{ color: '#64748b', fontSize: '0.9rem' }}>No appearances in this set.</p>
+                  )}
+                </div>
+                <div>
+                  <h3 className="insights-subheading">Where competitors appeared instead</h3>
+                  {run.plain_report.loss_queries.length > 0 ? (
+                    <ul className="plain-report-list">
+                      {run.plain_report.loss_queries.map((q) => (
+                        <li key={q}>{q}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
+                      No competitor-only gaps in this set.
+                    </p>
+                  )}
+                </div>
+              </div>
+              {run.plain_report.models_note ? (
+                <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 0, maxWidth: '70ch' }}>
+                  {run.plain_report.models_note}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
           <section className="panel">
             <h2>3 · Summary</h2>
             <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem' }}>

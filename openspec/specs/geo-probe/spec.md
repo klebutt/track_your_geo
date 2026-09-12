@@ -3,12 +3,10 @@
 ## Purpose
 
 Local prototype for **Track Your GEO**: YAML pilots, batch LLM probes via LiteLLM, SQLite persistence, basic visibility and gap signals, recommendations, and run-level cost — with an honest disclaimer about API vs consumer chat.
-
 ## Requirements
-
 ### Requirement: Pilot configuration
 
-The system MUST load pilot profiles from YAML in the configured directory. Each profile MUST include `id`, `brand_name`, `location`, `competitors`, and `queries` (templates with optional `{brand}` and `{location}` placeholders). Each profile MAY include `brand_domains` (explicit domains treated as brand-owned for citation classification). Each profile MAY include `seed_domains` for legacy compatibility; the dashboard MUST NOT present `seed_domains` as live citations from model replies.
+The system MUST load pilot profiles from YAML in the configured directory. Each profile MUST include `id`, `brand_name`, `location`, `competitors`, and `queries` (templates with optional `{brand}` and `{location}` placeholders). Each profile MAY include `url`, `aliases` (alternative name strings used for visibility matching), `industry`, `services`, `brand_domains` (explicit domains treated as brand-owned for citation classification), and `seed_domains` for legacy compatibility; the dashboard MUST NOT present `seed_domains` as live citations from model replies. Inferred profiles created via URL intake MUST satisfy the same required fields before probes execute.
 
 #### Scenario: Load pilots for the UI
 
@@ -19,6 +17,11 @@ The system MUST load pilot profiles from YAML in the configured directory. Each 
 
 - **WHEN** a YAML file under the pilot directory fails validation
 - **THEN** the API logs a warning and continues listing other pilots without failing the request
+
+#### Scenario: Profile with aliases
+
+- **WHEN** a pilot YAML includes an `aliases` list
+- **THEN** the profile loads successfully and aliases are available to visibility matching
 
 ### Requirement: Simulated GEO probe
 
@@ -44,9 +47,9 @@ The system MUST execute each query template against every model in `TYGEO_ENABLE
 
 ### Requirement: Multi-provider GEO probes
 
-GEO probes MUST fan out sequentially across the comma-separated models in `TYGEO_ENABLED_PROBES` (default: `gpt-4o-mini-search-preview`). The system MUST support:
+GEO probes MUST fan out sequentially across the comma-separated models in `TYGEO_ENABLED_PROBES` (default: `gpt-5-search-api`). The system MUST support:
 
-- **OpenAI search models** — `web_search_options` with `url_citation` annotations
+- **OpenAI search models** — Chat Completions search path (`gpt-5-search-api` or successor) with `web_search_options` and `url_citation` annotations
 - **Perplexity** (`perplexity/sonar-pro`) — top-level `citations` URL array
 - **Gemini** (`gemini/gemini-2.5-flash`) — `googleSearch` tool with grounding metadata
 
@@ -69,7 +72,13 @@ Provider API keys MUST be read from `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, and 
 
 ### Requirement: Web search probes for citations (OpenAI path)
 
-OpenAI GEO probes MUST use a search-capable model (default `gpt-4o-mini-search-preview`) with `web_search_options` so replies include provider `url_citation` annotations.
+OpenAI GEO probes MUST use a search-capable Chat Completions model (default `gpt-5-search-api`) with `web_search_options` so replies include provider `url_citation` annotations.
+
+#### Scenario: OpenAI probe uses web search options
+
+- **WHEN** an OpenAI search model is included in `TYGEO_ENABLED_PROBES`
+- **THEN** each OpenAI probe call includes `web_search_options`
+- **AND** usage metadata records `probe_path: web_search`
 
 ### Requirement: Citation domain extraction
 
@@ -130,12 +139,17 @@ The product MUST communicate that API completions are not identical to consumer 
 
 ### Requirement: Visibility and competitor signals
 
-The system MUST compute visibility rate as the fraction of stored probe responses (across all enabled models) where the brand name appears as a case-insensitive substring in the assistant text. The system MUST store per-competitor boolean mention flags for each query.
+The system MUST compute visibility rate as the fraction of stored probe responses (across all enabled models) where the brand name **or any configured alias** appears as a case-insensitive substring in the assistant text. The system MUST store per-competitor boolean mention flags for each query.
 
-#### Scenario: Mark brand presence
+#### Scenario: Brand substring hit
 
 - **WHEN** a stored assistant text contains the pilot brand substring
 - **THEN** the corresponding `query_results` row records `brand_mentioned` as true, otherwise false
+
+#### Scenario: Alias substring hit
+
+- **WHEN** a stored assistant text does not contain `brand_name` but does contain a configured alias as a case-insensitive substring
+- **THEN** the corresponding `query_results` row records `brand_mentioned` as true
 
 ### Requirement: Structured mention extraction
 
@@ -269,3 +283,13 @@ The repository MUST ship tests for deterministic mention logic and at least one 
 
 - **WHEN** a developer runs `pytest eval`
 - **THEN** substring-based DeepEval metrics, extraction unit tests, and pure unit tests execute without live LLM probes
+
+### Requirement: Runs from inferred URL profiles
+
+The system MUST allow analysis runs that use an inferred `PilotProfile` produced from URL intake, not only a pre-existing YAML `pilot_id`. Such runs MUST persist enough profile snapshot data on the run (brand name, location, aliases, competitors, queries, source URL) for later inspection and re-test. Existing `POST /api/runs` with `pilot_id` MUST continue to work unchanged.
+
+#### Scenario: URL-inferred run persists profile snapshot
+
+- **WHEN** a run started from a URL completes
+- **THEN** the run record (or associated metadata) includes the inferred brand name, source URL, aliases, competitors, and query list used
+

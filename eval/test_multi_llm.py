@@ -24,9 +24,9 @@ def _make_pilot() -> PilotProfile:
 
 
 def test_enabled_probe_models_splits_csv():
-    settings = Settings(tygeo_enabled_probes="gpt-4o-mini-search-preview,perplexity/sonar-pro")
+    settings = Settings(tygeo_enabled_probes="gpt-5-search-api,perplexity/sonar-pro")
     assert settings.enabled_probe_models == [
-        "gpt-4o-mini-search-preview",
+        "gpt-5-search-api",
         "perplexity/sonar-pro",
     ]
 

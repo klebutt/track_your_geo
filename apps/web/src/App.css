@@ -368,6 +368,39 @@ tr.miss td {
   color: #334155;
 }
 
+.plain-report-headline {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.35;
+  color: #0f172a;
+  max-width: 40ch;
+}
+
+.plain-report-columns {
+  display: grid;
+  gap: 1.25rem;
+  margin: 1rem 0 1.25rem;
+}
+
+@media (min-width: 720px) {
+  .plain-report-columns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.plain-report-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.plain-report-list li {
+  margin-bottom: 0.45rem;
+}
+
 .insights-empty {
   color: #64748b;
   font-size: 0.88rem;

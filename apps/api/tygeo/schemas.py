@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, Self
 
-from typing import Literal
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from pydantic import BaseModel, Field, field_validator
+from tygeo.plain_report import PlainReportOut
 
 
 class PilotSummary(BaseModel):
@@ -86,8 +86,21 @@ class RunOut(BaseModel):
     usage_log: list[dict[str, Any]] | None = None
     source_url: str | None = None
     profile_snapshot: dict[str, Any] | None = None
+    plain_report: PlainReportOut | None = None
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def _attach_plain_report(self) -> Self:
+        from tygeo.plain_report import build_plain_report
+
+        self.plain_report = build_plain_report(
+            status=self.status,
+            brand_name=self.brand_name,
+            model_name=self.model_name,
+            query_results=self.query_results,
+        )
+        return self
 
 
 class RunListItem(BaseModel):

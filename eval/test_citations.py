@@ -145,6 +145,6 @@ def test_build_cited_domains_openai_unchanged():
         annotations,
         brand_name="Dishoom",
         brand_domains=["dishoom.com"],
-        model_name="gpt-4o-mini-search-preview",
+        model_name="gpt-5-search-api",
     )
     assert cited == [{"domain": "dishoom.com", "kind": "brand_owned"}]
