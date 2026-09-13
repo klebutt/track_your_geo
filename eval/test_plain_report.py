@@ -39,6 +39,10 @@ def test_plain_report_all_hits():
     assert "2 of 2" in report.headline
     assert len(report.win_queries) == 2
     assert report.loss_queries == []
+    assert report.loss_entries == []
+    assert report.what_this_is
+    assert len(report.deeper_insights) == 3
+    assert report.index_note
 
 
 def test_plain_report_multi_model_any_hit_counts():
@@ -70,13 +74,37 @@ def test_plain_report_mixed_wins_and_competitor_losses():
         brand_name="Acme",
         model_name="gpt-5-search-api",
         query_results=rows,
+        location="Croydon, UK",
     )
     assert report.searches_total == 3
     assert report.searches_recommended == 1
     assert report.win_queries == ["Win query"]
     assert report.loss_queries == ["Loss query"]
+    assert len(report.loss_entries) == 1
+    assert report.loss_entries[0].query == "Loss query"
+    assert report.loss_entries[0].competitors == ["Rival"]
+    assert report.competitor_summary and "Rival" in report.competitor_summary
     assert report.gap_summary
     assert "competitor" in report.gap_summary.lower() or "improve" in report.gap_summary.lower()
+    assert len(report.deeper_insights) == 3
+    assert "Acme" in report.deeper_insights[1].title
+    assert "Croydon" not in report.deeper_insights[1].title
+    assert report.deeper_insights_lead
+    assert "Soft" not in report.deeper_insights_lead
+    assert "£5-20" in report.deeper_insights_lead
+    assert "GBP" not in report.deeper_insights_lead
+    assert report.index_note
+    assert "how often you appear" in report.index_note.lower()
+    assert "cited as a source" in report.index_note.lower()
+    assert "compass" in report.index_note.lower()
+    assert "gpt-5-search-api" not in (report.models_note or "")
+    assert "OpenAI search" in (report.models_note or "")
+    assert "Most often named instead" not in (report.meaning or "")
+    assert "\u2014" not in (report.what_this_is or "")
+    assert "\u2014" not in (report.index_note or "")
+    for item in report.deeper_insights:
+        assert "\u2014" not in item.title
+        assert "\u2014" not in item.detail
 
 
 def test_plain_report_zero_visibility():
@@ -93,4 +121,23 @@ def test_plain_report_zero_visibility():
     assert report.searches_total == 2
     assert "0 of 2" in report.headline
     assert report.loss_queries == ["Q2"]
+    assert report.loss_entries[0].competitors == ["Rival"]
     assert "did not appear" in (report.gap_summary or "").lower()
+
+
+def test_plain_report_miss_without_tracked_competitors():
+    rows = [
+        _row("Quiet miss", brand=False, competitors={"Rival": False}),
+        _row("Another miss", brand=False, competitors=None),
+    ]
+    report = build_plain_report(
+        status="completed",
+        brand_name="Ghost Firm",
+        query_results=rows,
+    )
+    assert report.searches_recommended == 0
+    assert report.loss_entries == []
+    assert report.loss_queries == []
+    assert report.competitor_summary
+    assert "no tracked competitors" in report.competitor_summary.lower()
+    assert len(report.deeper_insights) == 3

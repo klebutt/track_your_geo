@@ -1,5 +1,6 @@
-# Brand-neutral accountant intent templates. Use {location}; optional {service}.
-queries:
+# Brand-neutral accountant intent templates.
+# local: use {location} (primary town/city). national: UK-wide / online / remote — do not depend on a town.
+local:
   - What are the best accountants for a small business in {location}? Name specific firms.
   - Best accountant for contractors and freelancers in {location} — list firms by name.
   - Affordable accountant for a startup in {location}; recommend specific practices.
@@ -10,3 +11,12 @@ queries:
   - Best accountant in {location} for restaurants or hospitality businesses; name options.
   - Which accountants in {location} are strong on Making Tax Digital / digital accounting?
   - Top local accountants in {location} for first-time limited company directors — name firms.
+national:
+  - Best online accountants for UK limited companies? Name specific firms.
+  - Recommended remote bookkeeping and tax accountants for UK freelancers — list firms by name.
+  - Affordable online accountant for a UK startup; recommend specific practices.
+  - Which UK accountants specialise in Making Tax Digital for companies that work mostly online?
+  - Best-rated cloud accountants serving clients across the UK; name actual firms.
+  - Who are good UK accountants for contractors and freelancers who do not need a local office?
+  - Top online accountancy practices for UK SMEs — name firms.
+  - Accountant for UK property landlords who prefer remote service — who should I consider?

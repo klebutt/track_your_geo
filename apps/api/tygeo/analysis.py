@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import time
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,121 @@ from tygeo.models import QueryResult, Recommendation, Run
 from tygeo.pilots import PilotProfile
 
 logger = logging.getLogger(__name__)
+
+# OpenAI gpt-5-search-api is TPM-limited (~6k/min on default tiers). Pace + retry
+# so outreach runs can complete all 10×3 probes instead of dropping OpenAI mid-run.
+_OPENAI_PROBE_PACE_SECONDS = 35.0
+_RATE_LIMIT_MAX_ATTEMPTS = 6
+_RATE_LIMIT_MAX_SLEEP_SECONDS = 90.0
+_RATE_LIMIT_DEFAULT_SLEEP_SECONDS = 2.0
+
+
+def _is_rate_limit_error(exc: BaseException) -> bool:
+    name = type(exc).__name__.lower()
+    msg = str(exc).lower()
+    return (
+        "ratelimit" in name
+        or "rate_limit" in msg
+        or "rate limit" in msg
+        or "429" in msg
+    )
+
+
+def _retry_after_seconds(exc: BaseException) -> tuple[float, bool]:
+    """Return (sleep_seconds, parsed_from_message)."""
+    msg = str(exc)
+    match_ms = re.search(r"try again in\s+(\d+(?:\.\d+)?)\s*ms", msg, re.I)
+    if match_ms:
+        return (
+            min(
+                _RATE_LIMIT_MAX_SLEEP_SECONDS,
+                float(match_ms.group(1)) / 1000.0 + 0.35,
+            ),
+            True,
+        )
+    match_s = re.search(
+        r"try again in\s+(\d+(?:\.\d+)?)\s*(?:s|seconds?)\b",
+        msg,
+        re.I,
+    )
+    if match_s:
+        return (
+            min(
+                _RATE_LIMIT_MAX_SLEEP_SECONDS,
+                float(match_s.group(1)) + 0.35,
+            ),
+            True,
+        )
+    return _RATE_LIMIT_DEFAULT_SLEEP_SECONDS, False
+
+
+def _needs_openai_pace(model: str) -> bool:
+    m = (model or "").lower()
+    return "gpt-5-search" in m or m.startswith("openai/")
+
+
+def _pace_openai_probe(model: str, last_openai_at: float | None) -> float | None:
+    """Sleep if needed; return updated last_openai_at timestamp after pacing check."""
+    if not _needs_openai_pace(model):
+        return last_openai_at
+    now = time.monotonic()
+    if last_openai_at is not None:
+        wait = _OPENAI_PROBE_PACE_SECONDS - (now - last_openai_at)
+        if wait > 0:
+            logger.info(
+                "Pacing OpenAI probe model=%s sleep=%.1fs (TPM guard)",
+                model,
+                wait,
+            )
+            time.sleep(wait)
+    return time.monotonic()
+
+
+def run_geo_query_provider_with_retries(
+    settings: Settings,
+    model: str,
+    query: str,
+    *,
+    location: str | None = None,
+    max_attempts: int = _RATE_LIMIT_MAX_ATTEMPTS,
+):
+    """Call ``run_geo_query_provider``, retrying rate limits with backoff."""
+    last_exc: BaseException | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return run_geo_query_provider(
+                settings,
+                model,
+                query,
+                location=location,
+            )
+        except Exception as exc:
+            last_exc = exc
+            if not _is_rate_limit_error(exc) or attempt >= max_attempts:
+                raise
+            sleep_for, parsed = _retry_after_seconds(exc)
+            if _needs_openai_pace(model):
+                # gpt-5-search TPM is per-minute; provider "700ms" hints are useless.
+                sleep_for = min(
+                    _RATE_LIMIT_MAX_SLEEP_SECONDS,
+                    max(45.0, 15.0 * attempt),
+                )
+            elif not parsed:
+                sleep_for = min(
+                    _RATE_LIMIT_MAX_SLEEP_SECONDS,
+                    _RATE_LIMIT_DEFAULT_SLEEP_SECONDS * (2 ** (attempt - 1)),
+                )
+            logger.warning(
+                "Rate limited model=%s attempt=%s/%s; sleeping %.2fs",
+                model,
+                attempt,
+                max_attempts,
+                sleep_for,
+            )
+            time.sleep(sleep_for)
+    assert last_exc is not None
+    raise last_exc
+
 
 
 def _mentions(text: str, phrase: str) -> bool:
@@ -253,18 +370,24 @@ def execute_run(
         location = run.location
 
     results: list[dict] = []
+    last_openai_at: float | None = None
 
     for q_template in pilot.queries:
         q = pilot.format_query(q_template, brand=brand, location=location)
         for model in enabled_models:
             try:
-                text, meta, annotations, citation_urls, gemini_response = run_geo_query_provider(
-                    settings,
-                    model,
-                    q,
-                    location=location,
+                last_openai_at = _pace_openai_probe(model, last_openai_at)
+                text, meta, annotations, citation_urls, gemini_response = (
+                    run_geo_query_provider_with_retries(
+                        settings,
+                        model,
+                        q,
+                        location=location,
+                    )
                 )
             except Exception as exc:
+                if _needs_openai_pace(model):
+                    last_openai_at = time.monotonic()
                 logger.exception("Probe failed for model=%s query=%r", model, q)
                 usage_log.append(
                     {
@@ -276,6 +399,9 @@ def execute_run(
                 )
                 db.commit()
                 continue
+
+            if _needs_openai_pace(model):
+                last_openai_at = time.monotonic()
 
             usage_log.append({"phase": "probe", "query": q, **meta})
             cost_usd = float(meta.get("cost_usd") or 0.0)

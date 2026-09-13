@@ -94,11 +94,14 @@ class RunOut(BaseModel):
     def _attach_plain_report(self) -> Self:
         from tygeo.plain_report import build_plain_report
 
+        snap = self.profile_snapshot or {}
         self.plain_report = build_plain_report(
             status=self.status,
             brand_name=self.brand_name,
             model_name=self.model_name,
             query_results=self.query_results,
+            locality_stance=str(snap.get("locality_stance") or "") or None,
+            location=str(snap.get("location") or self.location or "") or None,
         )
         return self
 

@@ -24,6 +24,8 @@ class PilotProfile(BaseModel):
     industry: str | None = None
     services: list[str] = Field(default_factory=list)
     location_raw: str | None = None
+    locality_stance: str | None = None
+    online_remote: str | None = None
 
     @classmethod
     def from_yaml(cls, path: Path) -> PilotProfile:

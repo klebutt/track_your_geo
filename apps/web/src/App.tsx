@@ -86,6 +86,16 @@ type RunListItem = {
   source_url?: string | null
 }
 
+type LossEntry = {
+  query: string
+  competitors: string[]
+}
+
+type DeeperInsight = {
+  title: string
+  detail: string
+}
+
 type PlainReport = {
   ready: boolean
   searches_recommended: number
@@ -93,8 +103,16 @@ type PlainReport = {
   headline: string
   win_queries: string[]
   loss_queries: string[]
+  loss_entries?: LossEntry[]
   gap_summary?: string | null
   models_note?: string | null
+  geography_note?: string | null
+  what_this_is?: string | null
+  meaning?: string | null
+  competitor_summary?: string | null
+  deeper_insights?: DeeperInsight[]
+  deeper_insights_lead?: string | null
+  index_note?: string | null
 }
 
 type Run = {
@@ -121,8 +139,15 @@ type Run = {
     url?: string
     competitors?: string[]
     queries?: string[]
+    brand_domains?: string[]
   } | null
   plain_report?: PlainReport | null
+}
+
+type ViewSource = 'demo' | 'url'
+
+function isUrlRunListItem(r: RunListItem): boolean {
+  return Boolean(r.source_url) || r.pilot_id.startsWith('url-')
 }
 
 function formatProbeTemplate(template: string, brand: string, location: string): string {
@@ -134,6 +159,14 @@ function formatRunDateTime(iso: string): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   })
+}
+
+function formatRunDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' })
+}
+
+function formatUrlRunOption(r: RunListItem): string {
+  return `${r.brand_name} — ${formatRunDate(r.created_at)}`
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -182,6 +215,11 @@ function App() {
   const [run, setRun] = useState<Run | null>(null)
   const [runHistory, setRunHistory] = useState<RunListItem[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [urlRunOptions, setUrlRunOptions] = useState<RunListItem[]>([])
+  const [selectedUrlRunId, setSelectedUrlRunId] = useState<number | ''>('')
+  const [viewSource, setViewSource] = useState<ViewSource>('demo')
+  const [loadingUrlOptions, setLoadingUrlOptions] = useState(false)
+  const [loadingUrlRun, setLoadingUrlRun] = useState(false)
 
   const loadRunHistory = useCallback(
     async (id: string, options?: { setActiveRun?: boolean }) => {
@@ -202,6 +240,7 @@ function App() {
           if (latest) {
             const full = await fetchJson<Run>(`${API_BASE}/api/runs/${latest.id}`)
             setRun(full)
+            setSelectedUrlRunId('')
           } else {
             setRun(null)
           }
@@ -215,6 +254,43 @@ function App() {
       }
     },
     [],
+  )
+
+  const loadUrlRunOptions = useCallback(async () => {
+    setLoadingUrlOptions(true)
+    try {
+      const list = await fetchJson<RunListItem[]>(`${API_BASE}/api/runs?limit=50`)
+      const urlRuns = list.filter((r) => r.status === 'completed' && isUrlRunListItem(r))
+      setUrlRunOptions(urlRuns)
+      return urlRuns
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load past URL analyses')
+      return [] as RunListItem[]
+    } finally {
+      setLoadingUrlOptions(false)
+    }
+  }, [])
+
+  const selectUrlRun = useCallback(
+    async (runId: number) => {
+      setError(null)
+      setViewSource('url')
+      setSelectedUrlRunId(runId)
+      setLoadingUrlRun(true)
+      try {
+        const full = await fetchJson<Run>(`${API_BASE}/api/runs/${runId}`)
+        setRun(full)
+        if (full.source_url) setUrlInput(full.source_url)
+        if (full.pilot_id) {
+          await loadRunHistory(full.pilot_id, { setActiveRun: false })
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load URL run')
+      } finally {
+        setLoadingUrlRun(false)
+      }
+    },
+    [loadRunHistory],
   )
 
   const loadPilots = useCallback(async () => {
@@ -236,6 +312,10 @@ function App() {
   useEffect(() => {
     void loadPilots()
   }, [loadPilots])
+
+  useEffect(() => {
+    void loadUrlRunOptions()
+  }, [loadUrlRunOptions])
 
   useEffect(() => {
     if (!pilotId) {
@@ -260,13 +340,12 @@ function App() {
     }
   }, [pilotId])
 
-  // Only swap the active run when the demo brand changes — not when a URL run finishes
-  // (otherwise finishing Analyse URL reloads the dropdown pilot and hides URL results).
+  // Demo brand owns the active run only while viewSource is 'demo' — never overwrite a URL selection.
   useEffect(() => {
-    if (!pilotId || running) return
+    if (!pilotId || running || viewSource !== 'demo') return
     void loadRunHistory(pilotId, { setActiveRun: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit `running`
-  }, [pilotId, loadRunHistory])
+  }, [pilotId, loadRunHistory, viewSource])
 
   const trendData = useMemo<TrendPoint[]>(
     () =>
@@ -285,12 +364,44 @@ function App() {
     return pilotDetail.queries.map((t) => formatProbeTemplate(t, b, loc))
   }, [pilotDetail, brand, location])
 
+  const urlAnalysisProbes = useMemo(() => {
+    if (viewSource !== 'url' || !run) return []
+    const snapQueries = run.profile_snapshot?.queries
+    if (snapQueries?.length) return snapQueries
+    const seen = new Set<string>()
+    const unique: string[] = []
+    for (const q of run.query_results) {
+      if (q.query_text && !seen.has(q.query_text)) {
+        seen.add(q.query_text)
+        unique.push(q.query_text)
+      }
+    }
+    return unique
+  }, [viewSource, run])
+
+  const urlCompetitors = useMemo(
+    () => (viewSource === 'url' ? run?.profile_snapshot?.competitors ?? [] : []),
+    [viewSource, run],
+  )
+
+  const brandDomainsHint = useMemo(() => {
+    if (viewSource === 'url') {
+      const domains = run?.profile_snapshot?.brand_domains
+      return domains?.length ? domains.join(', ') : 'heuristic'
+    }
+    return pilotDetail?.brand_domains?.length
+      ? pilotDetail.brand_domains.join(', ')
+      : 'heuristic'
+  }, [viewSource, run, pilotDetail])
+
   const probeErrors = useMemo(
     () => (run?.usage_log ?? []).filter((e) => e.phase === 'probe_error'),
     [run],
   )
 
   const onRun = async () => {
+    setViewSource('demo')
+    setSelectedUrlRunId('')
     setRunning(true)
     setError(null)
     setRun(null)
@@ -326,6 +437,7 @@ function App() {
       setError('Paste a website URL to analyse.')
       return
     }
+    setViewSource('url')
     setRunning(true)
     setError(null)
     setRun(null)
@@ -336,41 +448,21 @@ function App() {
         body: JSON.stringify({ url, vertical: 'accountants' }),
       })
       setRun(started)
+      setSelectedUrlRunId(started.id)
+      let finished = started
       if (started.status === 'running') {
-        const completed = await pollUntilRunComplete(API_BASE, started.id, setRun)
-        setRun(completed)
-        if (completed.pilot_id) {
-          await loadRunHistory(completed.pilot_id, { setActiveRun: false })
-        }
-      } else if (started.pilot_id) {
-        await loadRunHistory(started.pilot_id, { setActiveRun: false })
+        finished = await pollUntilRunComplete(API_BASE, started.id, setRun)
+        setRun(finished)
       }
+      setSelectedUrlRunId(finished.id)
+      if (finished.pilot_id) {
+        await loadRunHistory(finished.pilot_id, { setActiveRun: false })
+      }
+      await loadUrlRunOptions()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'URL analysis failed')
     } finally {
       setRunning(false)
-    }
-  }
-
-  const onShowLatestUrlRun = async () => {
-    setError(null)
-    try {
-      const list = await fetchJson<RunListItem[]>(`${API_BASE}/api/runs?limit=30`)
-      const latestUrl = list.find(
-        (r) => r.status === 'completed' && (r.source_url || r.pilot_id.startsWith('url-')),
-      )
-      if (!latestUrl) {
-        setError('No completed URL analysis found yet.')
-        return
-      }
-      const full = await fetchJson<Run>(`${API_BASE}/api/runs/${latestUrl.id}`)
-      setRun(full)
-      if (full.pilot_id) {
-        await loadRunHistory(full.pilot_id, { setActiveRun: false })
-      }
-      if (full.source_url) setUrlInput(full.source_url)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load URL run')
     }
   }
 
@@ -428,14 +520,45 @@ function App() {
             </button>
           </div>
         </div>
-        <p style={{ marginBottom: 0, marginTop: '0.75rem' }}>
-          <button type="button" onClick={() => void onShowLatestUrlRun()} disabled={running}>
-            Show latest URL analysis
-          </button>
-          <span style={{ marginLeft: '0.75rem', color: '#64748b', fontSize: '0.85rem' }}>
-            Recovers a finished URL run without spending again
-          </span>
-        </p>
+        <div className="grid two" style={{ marginTop: '0.75rem' }}>
+          <div>
+            <label htmlFor="past-url-run">Past URL analyses</label>
+            <select
+              id="past-url-run"
+              value={selectedUrlRunId === '' ? '' : String(selectedUrlRunId)}
+              onChange={(e) => {
+                const raw = e.target.value
+                if (!raw) {
+                  setSelectedUrlRunId('')
+                  return
+                }
+                void selectUrlRun(Number(raw))
+              }}
+              disabled={running || loadingUrlRun || loadingUrlOptions || urlRunOptions.length === 0}
+            >
+              <option value="">
+                {loadingUrlOptions
+                  ? 'Loading…'
+                  : urlRunOptions.length === 0
+                    ? 'No completed URL analyses yet'
+                    : 'Select a past analysis…'}
+              </option>
+              {urlRunOptions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {formatUrlRunOption(r)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <p style={{ margin: '0.55rem 0 0', color: '#64748b', fontSize: '0.85rem' }}>
+              {loadingUrlRun
+                ? 'Loading selected run…'
+                : 'Opens a finished URL run without spending again. All sections below follow this selection.'}
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="panel">
@@ -451,7 +574,10 @@ function App() {
               <select
                 id="pilot"
                 value={pilotId}
-                onChange={(e) => setPilotId(e.target.value)}
+                onChange={(e) => {
+                  setViewSource('demo')
+                  setPilotId(e.target.value)
+                }}
                 disabled={running}
               >
                 {pilots.map((p) => (
@@ -487,43 +613,81 @@ function App() {
           {run.plain_report?.ready ? (
             <section className="panel plain-report">
               <h2>Your AI recommendation report</h2>
+              {run.plain_report.what_this_is ? (
+                <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.95rem', maxWidth: '65ch' }}>
+                  {run.plain_report.what_this_is}
+                </p>
+              ) : null}
               <p className="plain-report-headline">{run.plain_report.headline}</p>
               <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.95rem', maxWidth: '65ch' }}>
                 That is {run.plain_report.searches_recommended} of {run.plain_report.searches_total}{' '}
                 customer-intent questions where at least one AI reply named{' '}
                 <strong>{run.brand_name}</strong>.
               </p>
-              {run.plain_report.gap_summary ? (
-                <p style={{ maxWidth: '65ch' }}>{run.plain_report.gap_summary}</p>
-              ) : null}
-              <div className="plain-report-columns">
-                <div>
+
+              <h3 className="insights-subheading">Who showed up instead</h3>
+              {(run.plain_report.loss_entries?.length ?? 0) > 0 ? (
+                <>
+                  {run.plain_report.competitor_summary ? (
+                    <p style={{ maxWidth: '65ch', marginTop: 0 }}>{run.plain_report.competitor_summary}</p>
+                  ) : null}
+                  <ul className="plain-report-list">
+                    {(run.plain_report.loss_entries ?? []).map((entry) => (
+                      <li key={entry.query}>
+                        <strong>{entry.competitors.join(', ')}</strong>
+                        <span style={{ color: '#64748b' }}> - on “{entry.query}”</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p style={{ color: '#64748b', fontSize: '0.9rem', maxWidth: '65ch' }}>
+                  {run.plain_report.competitor_summary ||
+                    'No tracked competitors were named on searches where you were missing.'}
+                </p>
+              )}
+
+              {run.plain_report.win_queries.length > 0 ? (
+                <>
                   <h3 className="insights-subheading">Where you appeared</h3>
-                  {run.plain_report.win_queries.length > 0 ? (
-                    <ul className="plain-report-list">
-                      {run.plain_report.win_queries.map((q) => (
-                        <li key={q}>{q}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p style={{ color: '#64748b', fontSize: '0.9rem' }}>No appearances in this set.</p>
-                  )}
-                </div>
-                <div>
-                  <h3 className="insights-subheading">Where competitors appeared instead</h3>
-                  {run.plain_report.loss_queries.length > 0 ? (
-                    <ul className="plain-report-list">
-                      {run.plain_report.loss_queries.map((q) => (
-                        <li key={q}>{q}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
-                      No competitor-only gaps in this set.
-                    </p>
-                  )}
-                </div>
-              </div>
+                  <ul className="plain-report-list">
+                    {run.plain_report.win_queries.map((q) => (
+                      <li key={q}>{q}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              <h3 className="insights-subheading">What this means</h3>
+              <p style={{ maxWidth: '65ch' }}>
+                {run.plain_report.meaning || run.plain_report.gap_summary}
+              </p>
+              {run.plain_report.geography_note ? (
+                <p style={{ maxWidth: '65ch', color: '#64748b', fontSize: '0.9rem' }}>
+                  {run.plain_report.geography_note}
+                </p>
+              ) : null}
+
+              {(run.plain_report.deeper_insights?.length ?? 0) > 0 ? (
+                <>
+                  <h3 className="insights-subheading">Optional deeper next steps</h3>
+                  <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem', maxWidth: '65ch' }}>
+                    {run.plain_report.deeper_insights_lead ||
+                      'One-off options typically in the £5-20 range if you want to go further - reply if any of these would help.'}
+                  </p>
+                  <ul className="plain-report-list deeper-insights-list">
+                    {(run.plain_report.deeper_insights ?? []).map((item) => (
+                      <li key={item.title}>
+                        <strong>{item.title}</strong>
+                        <div style={{ color: '#475569', fontSize: '0.9rem', marginTop: '0.2rem' }}>
+                          {item.detail}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
               {run.plain_report.models_note ? (
                 <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 0, maxWidth: '70ch' }}>
                   {run.plain_report.models_note}
@@ -559,7 +723,7 @@ function App() {
                 <div className="v">{(run.visibility_rate * 100).toFixed(0)}%</div>
               </div>
               <div className="stat">
-                <div className="k">Composite GEO score</div>
+                <div className="k">Composite index</div>
                 <div className="v">{run.composite_score.toFixed(1)}</div>
               </div>
               <div className="stat">
@@ -577,11 +741,10 @@ function App() {
                 </div>
               </div>
             </div>
-            <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 0 }}>
-              Visibility = fraction of probes where the assistant text contained &quot;
-              {run.brand_name}&quot; (substring gate). Composite score blends visibility, position,
-              sentiment, and citations. Tokens: {run.total_prompt_tokens} prompt +{' '}
-              {run.total_completion_tokens} completion.
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 0, maxWidth: '70ch' }}>
+              {run.plain_report?.index_note ||
+                'Visibility = how often you appear in these replies. The composite index also reflects how strongly you are recommended, the tone when you are mentioned, and whether you are cited as a source - a compass, not a replica of consumer ChatGPT.'}{' '}
+              Tokens: {run.total_prompt_tokens} prompt + {run.total_completion_tokens} completion.
               {probeErrors.length > 0 && (
                 <>
                   {' '}
@@ -606,17 +769,43 @@ function App() {
           <section className="panel">
             <h2>4 · Insights &amp; optimization</h2>
             <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.9rem', maxWidth: '65ch' }}>
-              How your composite GEO score is calculated, plus LLM-generated actions based on this
-              run&apos;s visibility, sentiment, position, and citation gaps.
+              Operator depth: how the composite index is calculated, plus LLM-generated actions from
+              this run&apos;s visibility, sentiment, position, and citation gaps (not the customer
+              hero report above).
             </p>
             <ScoreBreakdown compositeScore={run.composite_score} queryResults={run.query_results} />
-            <h3 className="insights-subheading">Recommended actions</h3>
+            <h3 className="insights-subheading">Operator recommended actions</h3>
             <RecommendationsList recommendations={run.recommendations} />
           </section>
         </>
       )}
 
-      {pilotDetail && resolvedProbes.length > 0 && (
+      {viewSource === 'url' && urlAnalysisProbes.length > 0 ? (
+        <section className="panel">
+          <h2>5 · Neutral GEO probes used in this analysis</h2>
+          <p style={{ marginTop: 0, color: '#64748b', maxWidth: '65ch' }}>
+            These are the brand-neutral questions that were probed for the selected URL run. None of
+            them include the tracked brand name in the prompt.
+          </p>
+          {urlCompetitors.length > 0 && (
+            <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: 0 }}>
+              Competitor substring checks:{' '}
+              <span className="mono">{urlCompetitors.join(', ')}</span>
+            </p>
+          )}
+          <ol className="probe-list" style={{ marginBottom: 0 }}>
+            {urlAnalysisProbes.map((q) => (
+              <li key={q} style={{ marginBottom: '0.5rem' }}>
+                <span className="mono" style={{ fontSize: '0.82rem' }}>
+                  {q}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
+      {viewSource === 'demo' && pilotDetail && resolvedProbes.length > 0 ? (
         <section className="panel">
           <h2>5 · Neutral GEO probes for this scenario</h2>
           <p style={{ marginTop: 0, color: '#64748b', maxWidth: '65ch' }}>
@@ -640,7 +829,7 @@ function App() {
             ))}
           </ol>
         </section>
-      )}
+      ) : null}
 
       {run && (
         <>
@@ -648,9 +837,7 @@ function App() {
             <h2>6 · Query-level results</h2>
             <p style={{ marginTop: 0, fontSize: '0.85rem', color: '#64748b' }}>
               Domains from web-search citation metadata per probe. Teal = brand-owned (
-              {pilotDetail?.brand_domains?.length
-                ? pilotDetail.brand_domains.join(', ')
-                : 'heuristic'}
+              {brandDomainsHint}
               ). Higher cost than plain chat — see run total.
             </p>
             <div style={{ overflowX: 'auto' }}>

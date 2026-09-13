@@ -68,15 +68,17 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 ## Current focus (update by humans; keep in sync with vault `status.md`)
 
-- **Active change:** [plain-language-report](openspec/changes/plain-language-report/) — implemented; archive next
+- **Active change:** [wave1-customer-export](openspec/changes/wave1-customer-export/) — shipped; first-5 check done; overnight remainder pending
+- **Also open:** [report-conversion-quickwins](openspec/changes/report-conversion-quickwins/), [locality-aware-queries](openspec/changes/locality-aware-queries/) — archive when ready
 - **Priorities (in order):**
-  1. Lock locality-aware query open questions (see EOD worklog)
-  2. Archive `plain-language-report`
-  3. Propose + implement locality-aware accountant queries (stance infer, local vs UK-wide mix, local competitors)
-  4. Top 10 vault prospects via **local** URL→report (do not copy prospect list into git)
-  5. Railway/prod parked until WTP validated
+  1. After PDF check: overnight remainder `scripts/wave1_bulk_export.py --offset 5 --limit 45 --skip-pause --reuse-completed`
+  2. BD sheets from vault `reports/wave1-manifest.csv` + `wave1-pdfs/`
+  3. Archive OpenSpec changes when confident
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app (prod not required)
-- **Context:** EOD [docs/worklog/2026-09-12-eod.md](docs/worklog/2026-09-12-eod.md). Vault `status.md` + `accountant-prospects.md`.
+- **Context:** [docs/worklog/2026-09-13-wave1-customer-export.md](docs/worklog/2026-09-13-wave1-customer-export.md) · vault `decisions/2026-09-13-bulk-probe-economics.md`
+- **OpenAI search TPM:** 6k on `gpt-5-search-api`; pacing keeps 30/30 (~15 min/firm)
+- **Locked:** Option A full 3-model; do not copy `accountant-prospects` into git
+- **Wave-1 check:** first 5 complete (~$3.66); say continue overnight for offset 5+
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

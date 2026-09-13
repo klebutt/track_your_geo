@@ -8,15 +8,20 @@ import pytest
 from tygeo.config import Settings
 from tygeo.pilots import PilotProfile
 from tygeo.url_intake import (
+    build_queries_for_stance,
     build_queries_from_templates,
     generate_aliases,
+    geography_note_for_stance,
     html_to_text,
     infer_pilot_from_url,
+    load_accountant_query_banks,
     load_accountant_query_templates,
+    normalize_locality_stance,
     normalize_url,
     pilot_snapshot,
     primary_location,
     profile_dict_to_pilot,
+    query_mix_for_stance,
 )
 
 
@@ -190,11 +195,43 @@ def test_infer_primary_location_for_queries(monkeypatch):
     mock_enrich.assert_not_called()
     assert pilot.location == "Bristol, UK"
     assert pilot.location_raw == "Bristol, Bath, Yeovil, Taunton, London, UK"
-    assert all("Bristol, UK" in q for q in pilot.queries)
+    local_qs = [q for q in pilot.queries if "Bristol, UK" in q]
+    national_qs = [q for q in pilot.queries if "Bristol, UK" not in q]
+    assert len(local_qs) >= 1
     assert not any("Bath, Yeovil" in q for q in pilot.queries)
+    # Default unclear stance → 8 local + 2 national
+    assert len(national_qs) >= 1
     snap = pilot_snapshot(pilot)
     assert snap["location"] == "Bristol, UK"
     assert snap["location_raw"] == pilot.location_raw
+
+
+def test_query_mix_locked_counts():
+    assert query_mix_for_stance("local_only") == (10, 0)
+    assert query_mix_for_stance("local_primary") == (8, 2)
+    assert query_mix_for_stance("hybrid") == (7, 3)
+    assert query_mix_for_stance("remote_primary") == (3, 7)
+    assert query_mix_for_stance("unclear") == (8, 2)
+    assert normalize_locality_stance("LOCAL-PRIMARY") == "local_primary"
+
+
+def test_build_queries_for_stance_hybrid_mix():
+    pilot_dir = Path(__file__).resolve().parents[1] / "apps" / "api" / "pilots"
+    banks = load_accountant_query_banks(pilot_dir)
+    qs = build_queries_for_stance(
+        banks,
+        stance="hybrid",
+        location="Bristol, UK",
+        services=["tax"],
+        budget=10,
+    )
+    assert len(qs) == 10
+    local_hits = sum(1 for q in qs if "Bristol, UK" in q)
+    national_hits = sum(1 for q in qs if "Bristol, UK" not in q)
+    assert local_hits == 7
+    assert national_hits == 3
+    note = geography_note_for_stance("hybrid", primary_location="Bristol, UK")
+    assert "30%" in note or "Mix" in note
 
 
 def test_profile_dict_requires_brand():

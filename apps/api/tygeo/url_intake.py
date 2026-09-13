@@ -172,7 +172,12 @@ def extract_profile_from_text(
         "- services (array of short strings)\n"
         "- competitors (array of competitor firm names if clearly mentioned)\n"
         "- description (short string)\n"
-        "- brand_domains (array of domains owned by the brand if obvious)\n\n"
+        "- brand_domains (array of domains owned by the brand if obvious)\n"
+        "- locality_stance (one of: local_only, local_primary, hybrid, remote_primary, unclear)\n"
+        "- online_remote (one of: yes, partial, no, unclear)\n\n"
+        "Locality rules: cloud/Xero alone does NOT make hybrid — need UK-wide, nationwide, "
+        "or remote-client claims for hybrid/remote_primary. Prefer local_primary when the "
+        "site emphasises a town/city catchment.\n\n"
         "Page text:\n"
         f"{page_text[:MAX_TEXT_CHARS]}"
     )
@@ -195,6 +200,22 @@ def enrich_profile_from_url(
     partial = partial or {}
     brand = str(partial.get("brand_name") or "").strip()
     location = str(partial.get("location") or "").strip()
+    stance = normalize_locality_stance(partial.get("locality_stance"))
+    if stance in {"local_only", "local_primary"}:
+        competitor_geo = (
+            "Prefer independent local/regional rivals near the inferred location first; "
+            "add at most 1–2 well-known nationals only if needed to fill the list."
+        )
+    elif stance == "hybrid":
+        competitor_geo = (
+            "Mix local/regional rivals near the inferred location with a few UK-wide "
+            "or online-capable accountancy brands."
+        )
+    else:
+        competitor_geo = (
+            "Prefer plausible UK-wide or online accountancy rivals; include regional "
+            "names only when clearly relevant."
+        )
     user = (
         f"Infer a UK-focused {vertical} business profile from this website URL/domain.\n"
         f"URL: {url}\nHost: {host}\n"
@@ -206,15 +227,18 @@ def enrich_profile_from_url(
         "- services (array of short strings)\n"
         "- competitors (array of real firm names)\n"
         "- description (short string)\n"
-        "- brand_domains (array of domains owned by the brand if obvious)\n\n"
+        "- brand_domains (array of domains owned by the brand if obvious)\n"
+        "- locality_stance (one of: local_only, local_primary, hybrid, remote_primary, unclear)\n"
+        "- online_remote (one of: yes, partial, no, unclear)\n\n"
         "Competitor rules:\n"
-        "- Prefer local/regional rivals in the same vertical near the inferred location; "
-        "then well-known national alternatives if needed.\n"
+        f"- {competitor_geo}\n"
         "- Use plausible real firm names only; do not invent fake practices.\n"
         "- Exclude the brand itself and obvious aliases of the brand"
         + (f" (brand: {brand})" if brand else "")
         + ".\n"
         "- Return 3–8 competitors when possible; empty array only if truly unknown.\n\n"
+        "Locality rules: cloud/Xero alone does NOT make hybrid — need UK-wide/nationwide/"
+        "remote-client claims. Prefer local_primary for clear town catchment sites.\n"
         "Do not invent fake UK street addresses or phone numbers. "
         "Prefer plausible best-effort brand_name/location over leaving them empty."
         + (f"\nKnown location hint: {location}" if location else "")
@@ -321,17 +345,115 @@ def _merge_profile_dicts(base: dict[str, Any], enrich: dict[str, Any]) -> dict[s
     return merged
 
 
+def normalize_locality_stance(value: object) -> str:
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    allowed = {
+        "local_only",
+        "local_primary",
+        "hybrid",
+        "remote_primary",
+        "unclear",
+    }
+    if raw in allowed:
+        return raw
+    return "unclear"
+
+
+def normalize_online_remote(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"yes", "partial", "no", "unclear"}:
+        return raw
+    if raw in {"true", "y"}:
+        return "yes"
+    if raw in {"false", "n"}:
+        return "no"
+    return "unclear"
+
+
+# (local_count, national_count) for a 10-query budget
+_STANCE_MIX: dict[str, tuple[int, int]] = {
+    "local_only": (10, 0),
+    "local_primary": (8, 2),
+    "hybrid": (7, 3),
+    "remote_primary": (3, 7),
+    "unclear": (8, 2),  # treat as local_primary
+}
+
+
+def query_mix_for_stance(stance: str, *, budget: int = 10) -> tuple[int, int]:
+    local_n, national_n = _STANCE_MIX.get(normalize_locality_stance(stance), (8, 2))
+    total = local_n + national_n
+    if total == budget:
+        return local_n, national_n
+    # Scale if budget differs
+    if total <= 0:
+        return budget, 0
+    local_n = max(0, round(budget * local_n / total))
+    national_n = max(0, budget - local_n)
+    return local_n, national_n
+
+
+def geography_note_for_stance(stance: str, *, primary_location: str = "") -> str:
+    s = normalize_locality_stance(stance)
+    loc = (primary_location or "").strip()
+    near = f" near {loc}" if loc and loc.lower() not in {"uk", "united kingdom", "the uk"} else ""
+    if s == "local_only":
+        return f"Searches focused on local customer-intent questions{near}."
+    if s == "local_primary":
+        return (
+            f"Mostly local searches{near}, with up to two UK-wide/online niche questions."
+        )
+    if s == "hybrid":
+        return (
+            f"Mix of local searches{near} and UK-wide/online questions "
+            "(about 30% national)."
+        )
+    if s == "remote_primary":
+        return "Mostly UK-wide/online searches, with a few local questions."
+    return (
+        f"Mostly local searches{near}, with up to two UK-wide/online niche questions "
+        "(mix was not certain)."
+    )
+
+
 def load_accountant_query_templates(pilot_dir: Path) -> list[str]:
+    """Backward-compatible: flat local list (legacy callers)."""
+    banks = load_accountant_query_banks(pilot_dir)
+    return list(banks["local"]) or list(banks["national"])
+
+
+def load_accountant_query_banks(pilot_dir: Path) -> dict[str, list[str]]:
     path = pilot_dir / "templates" / "accountants_queries.yaml"
     if not path.is_file():
-        # Fallback relative to this package's pilots default layout
         alt = Path(__file__).resolve().parent.parent / "pilots" / "templates" / "accountants_queries.yaml"
         path = alt if alt.is_file() else path
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    queries = raw.get("queries") if isinstance(raw, dict) else None
-    if not isinstance(queries, list) or not queries:
+    if not isinstance(raw, dict):
         raise FileNotFoundError(f"Accountant query templates not found at {path}")
-    return [str(q).strip() for q in queries if str(q).strip()]
+
+    def _list(key: str) -> list[str]:
+        items = raw.get(key)
+        if not isinstance(items, list):
+            return []
+        return [str(q).strip() for q in items if str(q).strip()]
+
+    local = _list("local")
+    national = _list("national")
+    # Legacy flat `queries:` key → all local
+    if not local and not national:
+        legacy = _list("queries")
+        if not legacy:
+            raise FileNotFoundError(f"Accountant query templates not found at {path}")
+        local = legacy
+    return {"local": local, "national": national}
+
+
+def _format_template(tmpl: str, *, location: str, service: str) -> str:
+    try:
+        q = tmpl.format(location=location, service=service, brand="")
+    except Exception:
+        q = tmpl.replace("{location}", location).replace("{service}", service)
+    return q.strip()
 
 
 def build_queries_from_templates(
@@ -344,14 +466,48 @@ def build_queries_from_templates(
     service = services[0] if services else "small business"
     out: list[str] = []
     for tmpl in templates:
-        try:
-            q = tmpl.format(location=loc, service=service, brand="")
-        except Exception:
-            q = tmpl.replace("{location}", loc).replace("{service}", service)
-        q = q.strip()
+        q = _format_template(tmpl, location=loc, service=service)
         if q and q not in out:
             out.append(q)
     return out
+
+
+def build_queries_for_stance(
+    banks: dict[str, list[str]],
+    *,
+    stance: str,
+    location: str,
+    services: list[str],
+    budget: int = 10,
+) -> list[str]:
+    local_n, national_n = query_mix_for_stance(stance, budget=budget)
+    loc = location.strip() or "the UK"
+    # Avoid stuffing meaningless UK into every "local" slot when location is only country
+    if loc.lower() in {"uk", "united kingdom", "the uk", "england"} and local_n:
+        # Still run local templates but location reads as UK — prefer shifting toward national
+        # only when stance expects locals; keep templates as-is for honesty.
+        pass
+    service = services[0] if services else "small business"
+    local_tmpls = list(banks.get("local") or [])
+    national_tmpls = list(banks.get("national") or [])
+    out: list[str] = []
+    for tmpl in local_tmpls[:local_n]:
+        q = _format_template(tmpl, location=loc, service=service)
+        if q and q not in out:
+            out.append(q)
+    for tmpl in national_tmpls[:national_n]:
+        q = _format_template(tmpl, location=loc, service=service)
+        if q and q not in out:
+            out.append(q)
+    # Top up from whichever bank still has unused templates
+    if len(out) < budget:
+        for tmpl in local_tmpls[local_n:] + national_tmpls[national_n:]:
+            q = _format_template(tmpl, location=loc, service=service)
+            if q and q not in out:
+                out.append(q)
+            if len(out) >= budget:
+                break
+    return out[:budget]
 
 
 def profile_dict_to_pilot(
@@ -389,6 +545,8 @@ def profile_dict_to_pilot(
         industry=vertical,
         services=_as_str_list(data.get("services")),
         location_raw=location_raw,
+        locality_stance=normalize_locality_stance(data.get("locality_stance")),
+        online_remote=normalize_online_remote(data.get("online_remote")),
     )
 
 
@@ -434,17 +592,32 @@ def infer_pilot_from_url(
             extracted["brand_name"] = enriched.get("brand_name")
         if not str(extracted.get("location") or "").strip():
             extracted["location"] = enriched.get("location")
+        # Prefer enrich stance when base missing/unclear
+        if normalize_locality_stance(extracted.get("locality_stance")) == "unclear":
+            extracted["locality_stance"] = enriched.get("locality_stance")
+        if normalize_online_remote(extracted.get("online_remote")) == "unclear":
+            extracted["online_remote"] = enriched.get("online_remote")
 
     loc_primary, loc_raw = primary_location(str(extracted.get("location") or ""))
     extracted["location"] = loc_primary
+    extracted["locality_stance"] = normalize_locality_stance(extracted.get("locality_stance"))
+    extracted["online_remote"] = normalize_online_remote(extracted.get("online_remote"))
 
-    templates = load_accountant_query_templates(settings.pilot_dir_path)
-    queries = build_queries_from_templates(
-        templates,
+    banks = load_accountant_query_banks(settings.pilot_dir_path)
+    queries = build_queries_for_stance(
+        banks,
+        stance=str(extracted.get("locality_stance") or "unclear"),
         location=loc_primary,
         services=_as_str_list(extracted.get("services")),
     )
-    usage.append({"phase": "query_gen", "query_count": len(queries), "cost_usd": 0.0})
+    usage.append(
+        {
+            "phase": "query_gen",
+            "query_count": len(queries),
+            "locality_stance": extracted["locality_stance"],
+            "cost_usd": 0.0,
+        }
+    )
 
     pilot = profile_dict_to_pilot(
         extracted,
@@ -468,6 +641,8 @@ def pilot_snapshot(pilot: PilotProfile) -> dict[str, Any]:
         "services": list(pilot.services),
         "industry": pilot.industry,
         "brand_domains": list(pilot.brand_domains),
+        "locality_stance": pilot.locality_stance,
+        "online_remote": pilot.online_remote,
     }
     if pilot.location_raw:
         snap["location_raw"] = pilot.location_raw
