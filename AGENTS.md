@@ -68,17 +68,17 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 ## Current focus (update by humans; keep in sync with vault `status.md`)
 
-- **Active change:** [wave1-customer-export](openspec/changes/wave1-customer-export/) — shipped; first-5 check done; overnight remainder pending
+- **Active change:** [wave1-customer-export](openspec/changes/wave1-customer-export/) — shipped; QA-10 + batch-40 complete
 - **Also open:** [report-conversion-quickwins](openspec/changes/report-conversion-quickwins/), [locality-aware-queries](openspec/changes/locality-aware-queries/) — archive when ready
 - **Priorities (in order):**
-  1. After PDF check: overnight remainder `scripts/wave1_bulk_export.py --offset 5 --limit 45 --skip-pause --reuse-completed`
-  2. BD sheets from vault `reports/wave1-manifest.csv` + `wave1-pdfs/`
+  1. BD sheets from vault `cosmetics-qa-10-manifest.csv` + `wave1-batch40-manifest.csv` + `wave1-pdfs/`
+  2. Dedupe batch-40 manifest if needed (earlier dual-runner rows)
   3. Archive OpenSpec changes when confident
 
 - **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app (prod not required)
-- **Context:** [docs/worklog/2026-09-13-wave1-customer-export.md](docs/worklog/2026-09-13-wave1-customer-export.md) · vault `decisions/2026-09-13-bulk-probe-economics.md`
+- **Context:** [docs/worklog/2026-09-15-batch40-complete.md](docs/worklog/2026-09-15-batch40-complete.md) · [2026-09-13-wave1-customer-export.md](docs/worklog/2026-09-13-wave1-customer-export.md) · vault `decisions/2026-09-13-bulk-probe-economics.md`
 - **OpenAI search TPM:** 6k on `gpt-5-search-api`; pacing keeps 30/30 (~15 min/firm)
 - **Locked:** Option A full 3-model; do not copy `accountant-prospects` into git
-- **Wave-1 check:** first 5 complete (~$3.66); say continue overnight for offset 5+
+- **Wave-1:** QA-10 + batch-40 done (batch clean run **40/40 · $26.05 USD · 0 fails**); sendable pack ≈ 50
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.

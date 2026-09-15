@@ -22,10 +22,10 @@ Option A locked: full 3-model × ~50, local API, ~$45 / ~12–15h. Keep `gpt-5-s
 First 5 (`--limit 5 --reuse-completed`): 5/5 ok · ~$3.66  
 Mpathy 7/10 · Hewitt skipped · Simon 6/10 · Gilchrist 4/10 · Fox 6/10
 
-## Overnight remainder (when approved)
+## Overnight remainder → superseded by batch-40
 
-```text
-.\tygeo-venv\Scripts\python.exe scripts\wave1_bulk_export.py --offset 5 --limit 45 --skip-pause --reuse-completed
-```
+Original plan (`wave1_bulk_export.py --offset 5 --limit 45`) was replaced by cosmetics QA-10 + named **batch-40** URL list.
 
-Vault: `reports/wave1-pdfs/`, `wave1-progress.md`, `wave1-run-log.jsonl`, `wave1-manifest.csv`
+**Done 2026-09-15:** see [2026-09-15-batch40-complete.md](2026-09-15-batch40-complete.md) — 40/40 · $26.05 · `scripts/wave1_batch40_export.py`.
+
+Vault: `reports/wave1-pdfs/`, `cosmetics-qa-10-manifest.csv`, `wave1-batch40-manifest.csv`, `wave1-batch40-progress.md`

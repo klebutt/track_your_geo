@@ -276,19 +276,35 @@ def _to_fpdf_markdown(text: str) -> str:
     return s
 
 
-def write_customer_pdf(markdown: str, dest: Path, *, firm: str) -> Path:
-    """Render customer markdown to a styled PDF (no raw **, *, or - markers)."""
+def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
+    """Structured customer PDF — hero layout, snapshot table, page-1 wordmark."""
     from fpdf import FPDF
-    from fpdf.enums import XPos, YPos
+    from fpdf.enums import Align, XPos, YPos
+
+    pr = _plain_from_run(run)
+    if not pr.ready:
+        raise ValueError("plain_report not ready for PDF export")
+
+    brand = str(run.get("brand_name") or firm).strip() or firm
+    snap = run.get("profile_snapshot") or {}
+    loc = str(snap.get("location") or run.get("location") or "").strip()
+    url = str(run.get("source_url") or snap.get("source_url") or "").strip()
+    vis = float(run.get("visibility_rate") or 0.0)
+    composite = float(run.get("composite_score") or 0.0)
+    model_labels = customer_model_labels(str(run.get("model_name") or ""))
+    x, n = pr.searches_recommended, pr.searches_total
 
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     pdf = FPDF(format="A4")
-    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_margins(20, 20, 20)
     pdf.add_page()
-    pdf.set_margins(18, 18, 18)
-    pdf.set_text_color(30, 41, 59)
+    page_w = pdf.w - pdf.l_margin - pdf.r_margin
+    label_w = 52.0
+    value_w = page_w - label_w
+    row_h = 7.0
 
     def scrub(s: str) -> str:
         out = _currency_safe(s)
@@ -302,87 +318,131 @@ def write_customer_pdf(markdown: str, dest: Path, *, firm: str) -> Path:
         )
         return out.encode("latin-1", "ignore").decode("latin-1")
 
-    def write_md(text: str, *, size: int = 11, style: str = "", gap: float = 3, color=None):
+    def write_md(
+        text: str,
+        *,
+        size: int = 11,
+        style: str = "",
+        gap: float = 3,
+        color: tuple[int, int, int] | None = None,
+        lh: float = 6,
+    ) -> None:
         raw = scrub(_to_fpdf_markdown(text)).strip()
         if not raw:
             return
-        if color is not None:
-            pdf.set_text_color(*color)
-        else:
-            pdf.set_text_color(30, 41, 59)
+        pdf.set_text_color(*(color or (30, 41, 59)))
         pdf.set_font("Helvetica", style=style, size=size)
-        pdf.multi_cell(
-            0,
-            6,
-            raw,
-            markdown=True,
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
-        )
+        pdf.multi_cell(0, lh, raw, markdown=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         if gap:
             pdf.ln(gap)
 
-    write_md(f"AI Recommend - {firm}", size=16, style="B", gap=4)
+    def section_break(extra: float = 5) -> None:
+        pdf.ln(extra)
 
-    for para in markdown.split("\n\n"):
-        p = para.strip()
-        if not p or p.startswith("# AI recommendation"):
-            continue
-        if p == "---":
-            pdf.ln(3)
-            continue
-        if p.startswith("## "):
-            write_md(p[3:].strip(), size=13, style="B", gap=3)
-            continue
-        if p.startswith("### "):
-            write_md(p[4:].strip(), size=12, style="B", gap=2)
-            continue
-        if p.startswith("#### "):
-            write_md(p[5:].strip(), size=11, style="B", gap=2)
-            continue
-        if p.startswith("|"):
-            for line in p.split("\n"):
-                if line.startswith("|--") or not line.startswith("|"):
-                    continue
-                cells = [c.strip() for c in line.strip("|").split("|")]
-                if len(cells) >= 2 and cells[0]:
-                    label = re.sub(r"\*+", "", cells[0]).strip()
-                    value = cells[1]
-                    write_md(f"**{label}:** {value}", size=10, gap=1)
-            pdf.ln(2)
-            continue
+    # Page 1 wordmark only (drawn once at top of first page)
+    pdf.set_font("Helvetica", size=9)
+    pdf.set_text_color(100, 116, 139)
+    pdf.cell(0, 5, scrub("AI Recommend"), align=Align.R, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(2)
 
-        for line in p.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            m_bullet = re.match(r"^[-*]\s+(.*)$", line)
-            m_num = re.match(r"^(\d+)\.\s+(.*)$", line)
-            if m_bullet:
-                write_md(f"\xb7 {m_bullet.group(1)}", size=11, gap=1)
-            elif m_num:
-                write_md(f"{m_num.group(1)}. {m_num.group(2)}", size=11, gap=1)
-            elif (
-                len(line) >= 2
-                and line.startswith("*")
-                and line.endswith("*")
-                and not line.startswith("**")
-            ):
-                inner = line[1:-1].strip()
-                write_md(f"*{inner}*", size=10, gap=2, color=(100, 116, 139))
-            else:
-                write_md(line, size=11, gap=2)
+    write_md("Your AI recommendation report", size=14, style="B", gap=4)
+    if pr.what_this_is:
+        write_md(pr.what_this_is, size=10, gap=0, color=(71, 85, 105), lh=5.5)
+    section_break(6)
 
+    # Hero X of N
+    pdf.set_text_color(15, 23, 42)
+    pdf.set_font("Helvetica", style="B", size=32)
+    pdf.cell(0, 14, scrub(f"{x} of {n}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(2)
+    write_md(
+        f"customer-intent questions where at least one AI reply named **{brand}**.",
+        size=11,
+        gap=0,
+        lh=5.5,
+    )
+    section_break(7)
+
+    write_md("Who showed up instead", size=12, style="B", gap=3)
+    if pr.loss_entries:
+        if pr.competitor_summary:
+            write_md(pr.competitor_summary, size=10, gap=2, color=(71, 85, 105), lh=5)
+        for entry in pr.loss_entries:
+            names = ", ".join(entry.competitors) if entry.competitors else "Other firms"
+            write_md(
+                f"**{names}** - on \"{_no_em(entry.query)}\"",
+                size=10,
+                gap=0.5,
+                lh=4.8,
+            )
+    else:
+        write_md(
+            pr.competitor_summary
+            or "No tracked competitors were named on the searches where you were missing.",
+            size=10,
+            gap=0,
+            lh=5,
+        )
+    section_break(6)
+
+    write_md("What this means", size=12, style="B", gap=3)
+    write_md(pr.gap_summary or pr.meaning or "", size=11, gap=2)
+    if pr.geography_note and not STANCE_CODE_RE.search(pr.geography_note):
+        write_md(pr.geography_note, size=9, gap=0, color=(100, 116, 139), lh=5)
+    section_break(5)
+
+    if pr.deeper_insights:
+        write_md("Optional deeper next steps", size=12, style="B", gap=3)
+        if pr.deeper_insights_lead:
+            write_md(pr.deeper_insights_lead, size=10, gap=3, color=(71, 85, 105), lh=5)
+        for item in pr.deeper_insights:
+            write_md(item.title, size=11, style="B", gap=1)
+            write_md(item.detail, size=10, gap=2, color=(71, 85, 105), lh=5)
+
+    if pr.models_note:
+        section_break(3)
+        write_md(pr.models_note, size=9, gap=0, color=(100, 116, 139), lh=5)
+
+    section_break(6)
+    write_md("Snapshot (what we measured)", size=12, style="B", gap=3)
+    if loc:
+        write_md(f"Location: {loc}", size=9, gap=0.5, color=(71, 85, 105), lh=4.5)
+    if url:
+        write_md(url, size=9, gap=2, color=(71, 85, 105), lh=4.5)
+
+    snapshot_rows = [
+        ("Visibility", f"{vis * 100:.0f}%"),
+        ("Composite", f"{composite:.1f} / 100"),
+        ("Models", ", ".join(model_labels) if model_labels else "n/a"),
+    ]
+    pdf.set_draw_color(203, 213, 225)
+    pdf.set_text_color(30, 41, 59)
+    for label, value in snapshot_rows:
+        pdf.set_font("Helvetica", size=9)
+        pdf.cell(label_w, row_h, scrub(label), border=1)
+        pdf.set_font("Helvetica", style="B", size=9)
+        pdf.cell(value_w, row_h, scrub(value), border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(3)
+    if pr.index_note:
+        write_md(pr.index_note, size=9, gap=3, color=(100, 116, 139), lh=5)
+
+    services = _services(snap)
+    if services:
+        section_break(3)
+        write_md("Services inferred from the site: " + ", ".join(services), size=9, gap=2, lh=5)
+
+    queries = _unique_queries(run)
+    if queries:
+        section_break(4)
+        write_md("Questions we asked (brand-neutral)", size=11, style="B", gap=2)
+        for i, q in enumerate(queries, 1):
+            write_md(f"{i}. {_no_em(q)}", size=9, gap=0.8, lh=4.8, color=(71, 85, 105))
+
+    section_break(4)
     pdf.set_text_color(100, 116, 139)
     pdf.set_font("Helvetica", size=8)
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    pdf.multi_cell(
-        0,
-        5,
-        scrub(f"Generated {stamp} | AI Recommend"),
-        new_x=XPos.LMARGIN,
-        new_y=YPos.NEXT,
-    )
+    pdf.multi_cell(0, 4, scrub(f"Generated {stamp}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.output(str(dest))
     return dest
@@ -401,7 +461,7 @@ def export_customer_report(
     out_dir.mkdir(parents=True, exist_ok=True)
     pdf_name = pdf_filename_for_firm(brand)
     pdf_path = out_dir / pdf_name
-    write_customer_pdf(md, pdf_path, firm=brand)
+    write_customer_pdf(run, pdf_path, firm=brand)
     md_path = None
     if also_markdown:
         md_path = out_dir / pdf_name.replace(".pdf", ".md")
