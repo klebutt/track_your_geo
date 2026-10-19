@@ -1,0 +1,8 @@
+# AI Recommend robots.txt
+# We sell AI visibility, so our own site should be visible to AI crawlers.
+# Report pages (/r/*) use X-Robots-Tag: noindex instead of Disallow.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://airecommend.co.uk/sitemap.xml
