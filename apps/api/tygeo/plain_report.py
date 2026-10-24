@@ -43,10 +43,14 @@ class PlainReportOut(BaseModel):
     index_note: str | None = None
 
 
+from tygeo.brand import BOOKING_LINK, CONTACT_EMAIL
+
 # Sales-locked customer copy (£ is latin-1 U+00A3 - safe for Helvetica PDF).
-# NOTE: £5-20 pricing line removed per Kieran's approval (2026-10-18 website plan).
-# Wave-2 cold emails link to the report page with a "book a call" CTA instead.
-DEEPER_INSIGHTS_LEAD = "Reply if any of these would help."
+# NOTE: Pricing removed; book-a-call CTA instead (2026-10-24).
+DEEPER_INSIGHTS_LEAD = (
+    f"Want to talk it through? Book a free 15-minute call: {BOOKING_LINK}, "
+    f"or email {CONTACT_EMAIL}."
+)
 
 INDEX_NOTE = (
     "Visibility = how often you appear in these replies. "

@@ -91,8 +91,9 @@ def test_plain_report_mixed_wins_and_competitor_losses():
     assert "Croydon" not in report.deeper_insights[1].title
     assert report.deeper_insights_lead
     assert "Soft" not in report.deeper_insights_lead
-    assert "£5-20" in report.deeper_insights_lead
-    assert "GBP" not in report.deeper_insights_lead
+    assert "book" in report.deeper_insights_lead.lower()
+    assert "15-minute" in report.deeper_insights_lead or "15 minute" in report.deeper_insights_lead
+    assert "email" in report.deeper_insights_lead.lower()
     assert report.index_note
     assert "how often you appear" in report.index_note.lower()
     assert "cited as a source" in report.index_note.lower()
