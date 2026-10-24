@@ -329,8 +329,10 @@ firm_name,url
 # After batch completes, build the site:
 python site/build.py --vault "G:\My Drive\Obsidian\projects\track-your-geo" --batch wave2
 
-# Deploy to Cloudflare Pages:
-npx wrangler pages deploy site/dist --project-name airecommend
+# Deploy to Cloudflare Pages (must run from site/ for functions and wrangler.toml):
+cd site
+npx wrangler pages deploy dist --project-name airecommend --branch main
+cd ..
 ```
 
 **Output (in vault):**
@@ -407,8 +409,10 @@ Output goes to `site/dist/`. The slug-to-firm mapping is written to the vault at
 # Build from vault (generates report pages)
 python site/build.py --vault "G:\My Drive\Obsidian\projects\track-your-geo" --batch wave2
 
-# Deploy to Cloudflare Pages
-npx wrangler pages deploy site/dist --project-name airecommend
+# Deploy to Cloudflare Pages (must run from site/ for functions and wrangler.toml)
+cd site
+npx wrangler pages deploy dist --project-name airecommend --branch main
+cd ..
 ```
 
 **Add custom domains (Cloudflare dashboard):**

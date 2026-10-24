@@ -93,7 +93,7 @@ def test_plain_report_mixed_wins_and_competitor_losses():
     assert "Soft" not in report.deeper_insights_lead
     assert "book" in report.deeper_insights_lead.lower()
     assert "15-minute" in report.deeper_insights_lead or "15 minute" in report.deeper_insights_lead
-    assert "calendar" in report.deeper_insights_lead.lower() or "reply" in report.deeper_insights_lead.lower()
+    assert "email" in report.deeper_insights_lead.lower()
     assert report.index_note
     assert "how often you appear" in report.index_note.lower()
     assert "cited as a source" in report.index_note.lower()

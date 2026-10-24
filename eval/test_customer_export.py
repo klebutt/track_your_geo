@@ -67,7 +67,7 @@ def test_customer_markdown_locks(tmp_path: Path):
     # £5-20 pricing line removed; book-a-call CTA instead (2026-10-24)
     assert "£5-20" not in md
     assert "book" in md.lower() and "call" in md.lower()
-    assert "reply" in md.lower()
+    assert "email" in md.lower()
     assert "GBP" not in md
     assert "\ufffd" not in md
     assert "£5?20" not in md

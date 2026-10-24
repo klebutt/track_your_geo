@@ -29,15 +29,24 @@ Generic batch runner with args:
 - Preflight check before starting (API health + cost estimate)
 - Dry-run mode shows estimated cost/time
 
+### apps/api/tygeo/brand.py (new)
+
+Single source of truth for brand constants:
+- `BOOKING_LINK`
+- `CONTACT_EMAIL`
+- `TRADING_NAME_LINE`
+
+Imported by `tygeo.plain_report` and `site/config.py`.
+
 ### apps/api/tygeo/plain_report.py
 
 CTA changed from:
 > Reply if any of these would help.
 
 To:
-> Want to talk it through? Book a free 15-minute call: {BOOKING_LINK}, or just reply to this email.
+> Want to talk it through? Book a free 15-minute call: {BOOKING_LINK}, or email {CONTACT_EMAIL}.
 
-BOOKING_LINK sourced from `site/config.py` with fallback for standalone API.
+BOOKING_LINK and CONTACT_EMAIL imported from `tygeo.brand`.
 
 ### Tests (eval/test_batch_export.py)
 

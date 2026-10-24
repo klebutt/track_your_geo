@@ -43,23 +43,13 @@ class PlainReportOut(BaseModel):
     index_note: str | None = None
 
 
-# Booking link: single source of truth in site/config.py, with fallback for standalone API.
-try:
-    import sys
-    from pathlib import Path
-
-    _repo = Path(__file__).resolve().parents[3]
-    if str(_repo) not in sys.path:
-        sys.path.insert(0, str(_repo))
-    from site.config import BOOKING_LINK
-except ImportError:
-    BOOKING_LINK = "https://calendar.app.google/omsy1ZoJ7SsduLq87"
+from tygeo.brand import BOOKING_LINK, CONTACT_EMAIL
 
 # Sales-locked customer copy (£ is latin-1 U+00A3 - safe for Helvetica PDF).
 # NOTE: Pricing removed; book-a-call CTA instead (2026-10-24).
 DEEPER_INSIGHTS_LEAD = (
     f"Want to talk it through? Book a free 15-minute call: {BOOKING_LINK}, "
-    "or just reply to this email."
+    f"or email {CONTACT_EMAIL}."
 )
 
 INDEX_NOTE = (
