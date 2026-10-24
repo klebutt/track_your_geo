@@ -270,17 +270,12 @@ a:hover {
   background-image: url('/images/kieran.jpg');
 }
 
-.avatar-sam {
-  background-color: var(--color-accent);
-  background-image: url('/images/sam.jpg');
+.team-single {
+  max-width: 350px;
 }
 
 .team-member h3 {
   margin-bottom: var(--spacing-xs);
-}
-
-.team-member .surname {
-  font-weight: 600;
 }
 
 .team-member .role {

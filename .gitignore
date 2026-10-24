@@ -44,7 +44,6 @@ apps/web/dist/
 site/dist/
 site/public/sample-report.pdf
 site/public/images/kieran.jpg
-site/public/images/sam.jpg
 
 # Slug-to-firm mapping (lives in vault, not git)
 *-links.csv

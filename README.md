@@ -276,27 +276,22 @@ The `site/` directory contains the AI Recommend marketing website and per-firm r
 | `site/build.py` | Build script that assembles `site/dist/` |
 | `site/config.py` | Configuration with placeholders |
 
-### Placeholders to fill in before deploy
+### Configuration
 
-Edit `site/config.py` and replace these placeholders:
+**Already filled in (`site/config.py`):**
+- `KIERAN_SURNAME` = "Le Butt"
+- `BOOKING_LINK` = Google Calendar 15-min appointment URL
+- `TRADING_NAME_LINE` = "AI Recommend is a trading name of Kieran Le Butt"
 
-| Placeholder | What to fill in |
-|-------------|-----------------|
-| `BOOKING_LINK` | Cal.com or Calendly 15-min event URL |
-| `KIERAN_SURNAME` | Kieran's surname |
-| `KIERAN_PHONE` | Phone number (optional, leave empty if not wanted) |
-| `SAM_SURNAME` | Sam's surname |
-| `SAM_PHOTO_PATH` | Path to Sam's photo in `site/public/images/` |
-| `CONTACT_ADDRESS` | Business contact address |
-| `TRADING_NAME_LINE` | "AI Recommend is a trading name of Kieran {Surname} and Sam {Surname}" |
+**Optional placeholders:**
+| Placeholder | What to fill in | Default |
+|-------------|-----------------|---------|
+| `KIERAN_PHONE` | Phone number | empty |
+| `CONTACT_ADDRESS` | Business contact address | empty |
+| `TRADING_NAME_LINE` | Update when incorporated | has default |
 
-Also update the same placeholders in:
-- `site/public/index.html` (landing page)
-- `site/public/privacy.html` (privacy policy)
-
-Add photos to `site/public/images/`:
-- `kieran.jpg` - Kieran's photo
-- `sam.jpg` - Sam's photo
+Optionally add photo to `site/public/images/`:
+- `kieran.jpg` - Kieran's photo (site renders fine without it)
 
 ### Building the site
 

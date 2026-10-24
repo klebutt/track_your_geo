@@ -333,21 +333,27 @@ Test content here.
 class TestPublicPageContent:
     """Test public page HTML content."""
 
-    def test_index_has_booking_placeholder(self):
-        """Landing page should have booking link placeholder."""
+    def test_index_has_booking_link(self):
+        """Landing page should have booking link."""
         index_html = (PUBLIC_DIR / "index.html").read_text()
-        assert "PLACEHOLDER_BOOKING_LINK" in index_html
+        assert "calendar.app.google" in index_html
+        assert "PLACEHOLDER_BOOKING_LINK" not in index_html
 
-    def test_index_has_surname_placeholders(self):
-        """Landing page should have surname placeholders."""
+    def test_index_has_kieran_name(self):
+        """Landing page should have Kieran Le Butt's full name."""
         index_html = (PUBLIC_DIR / "index.html").read_text()
-        assert "PLACEHOLDER_KIERAN_SURNAME" in index_html
-        assert "PLACEHOLDER_SAM_SURNAME" in index_html
+        assert "Kieran Le Butt" in index_html
+        # Sam should not appear
+        assert "Sam" not in index_html
+        assert "PLACEHOLDER_SAM" not in index_html
 
-    def test_privacy_has_address_placeholder(self):
-        """Privacy page should have address placeholder."""
+    def test_privacy_has_data_controller(self):
+        """Privacy page should have data controller as Kieran Le Butt."""
         privacy_html = (PUBLIC_DIR / "privacy.html").read_text()
-        assert "PLACEHOLDER_CONTACT_ADDRESS" in privacy_html
+        assert "Kieran Le Butt" in privacy_html
+        assert "sole trader" in privacy_html
+        # No address placeholder (address is optional)
+        assert "PLACEHOLDER_CONTACT_ADDRESS" not in privacy_html
 
     def test_robots_allows_all(self):
         """robots.txt should allow all crawlers."""

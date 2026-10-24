@@ -3,12 +3,9 @@
 PLACEHOLDERS FOR KIERAN TO FILL IN:
 ====================================
 1. BOOKING_LINK - Cal.com or Calendly 15-min event URL
-2. KIERAN_SURNAME - Kieran's surname for display
-3. KIERAN_PHONE - Kieran's phone number (optional, can be empty string)
-4. SAM_SURNAME - Sam's surname for display
-5. SAM_PHOTO_PATH - Path to Sam's photo (relative to public/)
-6. CONTACT_ADDRESS - Contact address for privacy page and footer
-7. TRADING_NAME_LINE - Trading name/company line for footer
+2. KIERAN_PHONE - Kieran's phone number (optional, can be empty string)
+3. CONTACT_ADDRESS - Business contact address (optional, can be empty string)
+4. TRADING_NAME_LINE - Trading name/company line for footer
 
 Once incorporated, update TRADING_NAME_LINE to:
     "{Company} Ltd, registered in England & Wales no. XXXXXXX"
@@ -18,26 +15,21 @@ Once incorporated, update TRADING_NAME_LINE to:
 # PLACEHOLDERS - KIERAN MUST FILL THESE IN BEFORE DEPLOY
 # =============================================================================
 
-# Booking link (Cal.com or Calendly 15-min event)
-# Example: "https://cal.com/kieran/15min" or "https://calendly.com/kieran/15min"
-BOOKING_LINK = "https://PLACEHOLDER_BOOKING_LINK"
+# Booking link (Google Calendar 15-min appointment)
+BOOKING_LINK = "https://calendar.app.google/omsy1ZoJ7SsduLq87"
 
 # Kieran's details
-KIERAN_SURNAME = "PLACEHOLDER_KIERAN_SURNAME"
+KIERAN_SURNAME = "Le Butt"
 KIERAN_PHONE = ""  # Optional, leave empty if not wanted
 
-# Sam's details
-SAM_SURNAME = "PLACEHOLDER_SAM_SURNAME"
-SAM_PHOTO_PATH = "images/sam.jpg"  # Kieran must add this image to site/public/images/
-
 # Contact address (for privacy page and email signature)
-# Use a business address, not a home address
-CONTACT_ADDRESS = "PLACEHOLDER_CONTACT_ADDRESS"
+# Optional: leave empty to show only email, no address line
+CONTACT_ADDRESS = ""
 
 # Trading name line for footer (update when incorporated)
-# Pre-incorporation: "AI Recommend is a trading name of Kieran {Surname} and Sam {Surname}"
+# Pre-incorporation: "AI Recommend is a trading name of Kieran Le Butt"
 # Post-incorporation: "{Company} Ltd, registered in England & Wales no. XXXXXXX"
-TRADING_NAME_LINE = "AI Recommend is a trading name of Kieran PLACEHOLDER_KIERAN_SURNAME and Sam PLACEHOLDER_SAM_SURNAME"
+TRADING_NAME_LINE = "AI Recommend is a trading name of Kieran Le Butt"
 
 # =============================================================================
 # FIXED CONFIGURATION (do not change without good reason)
