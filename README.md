@@ -352,17 +352,21 @@ cd ..
 
 ### Building the site
 
-**Public pages only (for testing):**
+**Default build (public pages + sample report):**
 ```bash
 python site/build.py
 ```
 
-**With sample report (uses fictional riverside-accountants fixture):**
+The sample report uses the fictional `riverside-accountants.example` fixture and
+is required for the `/sample-report.pdf` link on the homepage. It's built by
+default.
+
+**Skip sample report (not recommended for full deploy):**
 ```bash
-python site/build.py --sample
+python site/build.py --no-sample
 ```
 
-**From vault manifest (generates real report pages):**
+**From vault manifest (also generates real report pages):**
 ```bash
 python site/build.py --vault "G:\My Drive\Obsidian\projects\track-your-geo" --batch wave2
 ```

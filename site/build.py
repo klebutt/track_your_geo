@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """AI Recommend static site builder.
 
-Builds the site by copying public/ to dist/ and optionally generating
-report pages from vault manifest data.
+Builds the site by copying public/ to dist/ and generating the sample report
+from fictional fixtures. Optionally generates additional report pages from
+vault manifest data.
 
 Usage:
-  python site/build.py                    # Build public pages only
-  python site/build.py --sample           # Include sample report from fixtures
-  python site/build.py --vault PATH --batch wave2  # Build from vault manifest
+  python site/build.py                    # Build public pages + sample report
+  python site/build.py --no-sample        # Skip sample report (not recommended)
+  python site/build.py --vault PATH --batch wave2  # Also build from vault manifest
+
+The sample report uses fictional data (riverside-accountants.example fixture)
+and is required for the /sample-report.pdf link on the homepage.
 
 The --vault option reads report data from the vault and generates /r/<slug>/
 pages. It writes the slug mapping back to the vault (never to git).
@@ -42,26 +46,29 @@ sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
 
 def load_config() -> dict:
     """Load site config, with fallbacks for missing values."""
+    import importlib.util
+
+    config_path = SITE_DIR / "config.py"
     try:
-        from site.config import (
-            BOOKING_LINK,
-            CONTACT_ADDRESS,
-            CONTACT_EMAIL,
-            TRADING_NAME_LINE,
-        )
-        return {
-            "booking_link": BOOKING_LINK,
-            "contact_address": CONTACT_ADDRESS,
-            "contact_email": CONTACT_EMAIL,
-            "trading_name_line": TRADING_NAME_LINE,
-        }
-    except ImportError:
-        return {
-            "booking_link": "PLACEHOLDER_BOOKING_LINK",
-            "contact_address": "PLACEHOLDER_CONTACT_ADDRESS",
-            "contact_email": "kieran@airecommend.co.uk",
-            "trading_name_line": "PLACEHOLDER_TRADING_NAME_LINE",
-        }
+        spec = importlib.util.spec_from_file_location("site_config", config_path)
+        if spec and spec.loader:
+            config_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(config_module)
+            return {
+                "booking_link": getattr(config_module, "BOOKING_LINK", "PLACEHOLDER_BOOKING_LINK"),
+                "contact_address": getattr(config_module, "CONTACT_ADDRESS", ""),
+                "contact_email": getattr(config_module, "CONTACT_EMAIL", "kieran@airecommend.co.uk"),
+                "trading_name_line": getattr(config_module, "TRADING_NAME_LINE", "PLACEHOLDER_TRADING_NAME_LINE"),
+            }
+    except Exception:
+        pass
+
+    return {
+        "booking_link": "PLACEHOLDER_BOOKING_LINK",
+        "contact_address": "PLACEHOLDER_CONTACT_ADDRESS",
+        "contact_email": "kieran@airecommend.co.uk",
+        "trading_name_line": "PLACEHOLDER_TRADING_NAME_LINE",
+    }
 
 
 def sha256_file(path: Path) -> str:
@@ -185,7 +192,10 @@ def build_report_page(
 
 
 def build_sample_report(dist: Path, config: dict) -> None:
-    """Build a sample report page from the riverside-accountants fixture."""
+    """Build a sample report page from the riverside-accountants fixture.
+
+    The sample uses fictional data only and is labeled clearly as a sample.
+    """
     from tygeo.customer_export import build_customer_markdown, write_customer_pdf
 
     # Load the gold fixture
@@ -195,37 +205,68 @@ def build_sample_report(dist: Path, config: dict) -> None:
     with open(fixture_path) as f:
         pilot = yaml.safe_load(f)
 
-    # Create a fake run result for the sample
+    # Create a fake run result for the sample with consistent data:
+    # 2 of 5 brand mentions = 40% visibility (matches visibility_rate)
+    queries = pilot["queries"]
+    query_results = []
+    for i, q in enumerate(queries):
+        # Indices 0 and 2 get brand mentioned (2 of 5 = 40%)
+        brand_mentioned = i in (0, 2)
+        # Indices 1, 3, 4 show competitor instead
+        competitors_mentioned = {}
+        if not brand_mentioned and pilot["competitors"]:
+            # Rotate through competitors for variety
+            comp_idx = (i - 1) % len(pilot["competitors"])
+            competitors_mentioned = {pilot["competitors"][comp_idx]: True}
+
+        query_results.append({
+            "query_text": q.replace("{location}", pilot["location"]),
+            "brand_mentioned": brand_mentioned,
+            "competitors_mentioned": competitors_mentioned,
+        })
+
     sample_run = {
         "status": "completed",
         "brand_name": pilot["brand_name"],
         "model_name": "gpt-5-search-api,perplexity/sonar-pro,gemini/gemini-2.5-flash",
         "source_url": pilot["url"],
-        "visibility_rate": 0.4,
-        "composite_score": 45.2,
+        "visibility_rate": 0.4,  # 2 of 5 = 40%
+        "composite_score": 42.0,
         "profile_snapshot": {
             "location": pilot["location"],
             "source_url": pilot["url"],
             "services": pilot.get("services", []),
         },
-        "query_results": [
-            {
-                "query_text": q.replace("{location}", pilot["location"]),
-                "brand_mentioned": i % 2 == 0,
-                "competitors_mentioned": (
-                    {pilot["competitors"][0]: True} if i % 2 != 0 else {}
-                ),
-            }
-            for i, q in enumerate(pilot["queries"])
-        ],
+        "query_results": query_results,
+        # Sample banner for PDF/markdown (handled by customer_export._plain_from_run)
+        "_sample_banner": (
+            "SAMPLE REPORT - This uses fictional data for demonstration. "
+            "Real reports show your firm's actual AI visibility."
+        ),
     }
 
     # Generate markdown and PDF
     md_text = build_customer_markdown(sample_run)
+
+    # Add SAMPLE label after the title (for HTML page)
+    # The CTA is already correct via brand.py → plain_report.DEEPER_INSIGHTS_LEAD
+    sample_label = (
+        "\n\n> **SAMPLE REPORT** — This report uses fictional data for "
+        "demonstration purposes. Real reports show your firm's actual AI visibility.\n"
+    )
+    if "# AI recommendation report" in md_text:
+        md_text = md_text.replace(
+            "# AI recommendation report",
+            "# AI recommendation report" + sample_label,
+            1
+        )
+
     tmp_dir = dist / "_tmp_sample"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     pdf_path = tmp_dir / "sample-report.pdf"
+
     write_customer_pdf(sample_run, pdf_path, firm=pilot["brand_name"])
+
     md_path = tmp_dir / "sample-report.md"
     md_path.write_text(md_text, encoding="utf-8")
 
@@ -334,9 +375,9 @@ def build_from_vault(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build AI Recommend static site")
     parser.add_argument(
-        "--sample",
+        "--no-sample",
         action="store_true",
-        help="Include sample report from fixtures",
+        help="Skip building the sample report (sample is built by default)",
     )
     parser.add_argument(
         "--vault",
@@ -362,7 +403,8 @@ def main() -> int:
     print(f"Building site to {dist}")
     copy_public_files(dist)
 
-    if args.sample:
+    # Build sample report by default (required for /sample-report.pdf link on homepage)
+    if not args.no_sample:
         try:
             build_sample_report(dist, config)
         except Exception as e:
