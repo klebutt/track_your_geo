@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "description": "Route report pages through the logging function",
+  "include": ["/r/*"],
+  "exclude": []
+}

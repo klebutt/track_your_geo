@@ -44,10 +44,9 @@ class PlainReportOut(BaseModel):
 
 
 # Sales-locked customer copy (£ is latin-1 U+00A3 - safe for Helvetica PDF).
-DEEPER_INSIGHTS_LEAD = (
-    "One-off options typically in the £5-20 range if you want to go further - "
-    "reply if any of these would help."
-)
+# NOTE: £5-20 pricing line removed per Kieran's approval (2026-10-18 website plan).
+# Wave-2 cold emails link to the report page with a "book a call" CTA instead.
+DEEPER_INSIGHTS_LEAD = "Reply if any of these would help."
 
 INDEX_NOTE = (
     "Visibility = how often you appear in these replies. "

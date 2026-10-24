@@ -259,3 +259,140 @@ Config: [`apps/api/railway.json`](apps/api/railway.json).
 2. Redeploy Railway.
 3. Run a full analysis from the Vercel URL and check the browser console for CORS errors.
 4. Redeploy Railway once more and confirm prior run history still appears (volume persistence).
+
+---
+
+## AI Recommend Site (airecommend.co.uk)
+
+The `site/` directory contains the AI Recommend marketing website and per-firm report pages. It's a plain static site deployed to Cloudflare Pages.
+
+### Site structure
+
+| Path | Purpose |
+|------|---------|
+| `site/public/` | Static assets (index.html, privacy.html, robots.txt, sitemap.xml, _headers, _routes.json, styles.css, favicon.svg) |
+| `site/templates/` | HTML templates for report pages |
+| `site/functions/r/` | Cloudflare Pages Function for D1 logging |
+| `site/build.py` | Build script that assembles `site/dist/` |
+| `site/config.py` | Configuration with placeholders |
+
+### Configuration
+
+**Already filled in (`site/config.py`):**
+- `KIERAN_SURNAME` = "Le Butt"
+- `BOOKING_LINK` = Google Calendar 15-min appointment URL
+- `TRADING_NAME_LINE` = "AI Recommend is a trading name of Kieran Le Butt"
+
+**Optional placeholders:**
+| Placeholder | What to fill in | Default |
+|-------------|-----------------|---------|
+| `KIERAN_PHONE` | Phone number | empty |
+| `CONTACT_ADDRESS` | Business contact address | empty |
+| `TRADING_NAME_LINE` | Update when incorporated | has default |
+
+Optionally add photo to `site/public/images/`:
+- `kieran.jpg` - Kieran's photo (site renders fine without it)
+
+### Building the site
+
+**Public pages only (for testing):**
+```bash
+python site/build.py
+```
+
+**With sample report (uses fictional riverside-accountants fixture):**
+```bash
+python site/build.py --sample
+```
+
+**From vault manifest (generates real report pages):**
+```bash
+python site/build.py --vault "G:\My Drive\Obsidian\projects\track-your-geo" --batch wave2
+```
+
+Output goes to `site/dist/`. The slug-to-firm mapping is written to the vault at `reports/wave2-links.csv` (never committed to git).
+
+### Cloudflare Pages deployment (manual steps for Kieran)
+
+**Prerequisites:**
+- Wrangler CLI: `npm install -g wrangler`
+- Cloudflare account with the airecommend.co.uk zone
+
+**One-time setup:**
+
+1. Log in to Wrangler:
+   ```bash
+   wrangler login
+   ```
+
+2. Create the D1 database:
+   ```bash
+   wrangler d1 create airecommend-log
+   ```
+
+3. Create the D1 schema:
+   ```bash
+   wrangler d1 execute airecommend-log --remote --command "CREATE TABLE IF NOT EXISTS hits (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, slug TEXT NOT NULL, path TEXT NOT NULL, country TEXT, user_agent TEXT, asn INTEGER); CREATE INDEX IF NOT EXISTS idx_hits_slug ON hits(slug); CREATE INDEX IF NOT EXISTS idx_hits_ts ON hits(ts);"
+   ```
+
+4. Create `site/wrangler.toml`:
+   ```toml
+   name = "airecommend"
+   compatibility_date = "2024-01-01"
+
+   [[d1_databases]]
+   binding = "DB"
+   database_name = "airecommend-log"
+   database_id = "<your-database-id-from-step-2>"
+   ```
+
+**Deploy:**
+
+```bash
+# Build from vault (generates report pages)
+python site/build.py --vault "G:\My Drive\Obsidian\projects\track-your-geo" --batch wave2
+
+# Deploy to Cloudflare Pages
+npx wrangler pages deploy site/dist --project-name airecommend
+```
+
+**Add custom domains (Cloudflare dashboard):**
+
+1. Go to Pages → airecommend → Custom domains
+2. Add `airecommend.co.uk`
+3. Add `www.airecommend.co.uk`
+4. Cloudflare creates the DNS records automatically
+
+**Set up www redirect:**
+
+1. Go to Rules → Redirect Rules
+2. Create rule: `www.airecommend.co.uk/*` → `https://airecommend.co.uk/$1` (301)
+
+**Enable Web Analytics (optional):**
+
+1. Go to Pages → airecommend → Settings → Web Analytics
+2. Enable (free, no cookies)
+
+**DNS warning:** Do NOT touch the existing MX, SPF, DKIM, or DMARC records. They handle email for kieran@airecommend.co.uk.
+
+### Querying report views
+
+```bash
+# Count views by slug
+wrangler d1 execute airecommend-log --remote --command "SELECT slug, MIN(ts) as first_view, COUNT(*) as views FROM hits GROUP BY slug ORDER BY first_view"
+
+# Recent views
+wrangler d1 execute airecommend-log --remote --command "SELECT * FROM hits ORDER BY ts DESC LIMIT 20"
+```
+
+### Testing report headers
+
+```bash
+curl -I https://airecommend.co.uk/r/sample/ | grep -E "(X-Robots-Tag|Referrer-Policy)"
+```
+
+Should show:
+```
+X-Robots-Tag: noindex, nofollow, noarchive
+Referrer-Policy: no-referrer
+```

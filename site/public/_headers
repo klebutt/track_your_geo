@@ -1,0 +1,12 @@
+# Cloudflare Pages headers
+# https://developers.cloudflare.com/pages/configuration/headers/
+
+# Report pages: prevent indexing and stop slug leaking in referrer
+/r/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+
+# Security headers for all pages
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
