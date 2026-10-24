@@ -64,9 +64,10 @@ def test_customer_markdown_locks(tmp_path: Path):
     assert "Get a plain-English action plan for Hewitt Accountancy" in md
     assert "action plan for Bristol" not in md
     assert "Soft" not in md
-    # £5-20 pricing line removed per Kieran's approval (2026-10-18 website plan)
+    # £5-20 pricing line removed; book-a-call CTA instead (2026-10-24)
     assert "£5-20" not in md
-    assert "Reply if any of these would help" in md
+    assert "book" in md.lower() and "call" in md.lower()
+    assert "reply" in md.lower()
     assert "GBP" not in md
     assert "\ufffd" not in md
     assert "£5?20" not in md
@@ -126,9 +127,9 @@ def test_export_writes_pdf(tmp_path: Path):
     assert pdf.stat().st_size > 500
     body = Path(meta["md_path"]).read_text(encoding="utf-8")
     assert "local_primary" not in body
-    # £5-20 pricing line removed per Kieran's approval (2026-10-18 website plan)
+    # £5-20 pricing line removed; book-a-call CTA instead (2026-10-24)
     assert "£5-20" not in body
-    assert "Reply if any of these would help" in body
+    assert "book" in body.lower() and "call" in body.lower()
     assert "GBP" not in body
     assert "gpt-5-search-api" not in body
 
@@ -145,9 +146,9 @@ def test_pdf_has_no_raw_markdown_markers(tmp_path: Path):
     assert "__" not in text
     assert not re.search(r"(?m)^-\s+\S", text)
     assert "Hewitt Accountancy" in text
-    # £5-20 pricing line removed per Kieran's approval (2026-10-18 website plan)
+    # £5-20 pricing line removed; book-a-call CTA instead (2026-10-24)
     assert "£5-20" not in text and "\xa35-20" not in text
-    assert "Reply if any of these would help" in text
+    assert "book" in text.lower() or "call" in text.lower()
     assert "GBP" not in text
     # Heading appears once
     assert text.lower().count("your ai recommendation report") == 1

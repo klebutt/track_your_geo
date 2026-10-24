@@ -43,10 +43,24 @@ class PlainReportOut(BaseModel):
     index_note: str | None = None
 
 
+# Booking link: single source of truth in site/config.py, with fallback for standalone API.
+try:
+    import sys
+    from pathlib import Path
+
+    _repo = Path(__file__).resolve().parents[3]
+    if str(_repo) not in sys.path:
+        sys.path.insert(0, str(_repo))
+    from site.config import BOOKING_LINK
+except ImportError:
+    BOOKING_LINK = "https://calendar.app.google/omsy1ZoJ7SsduLq87"
+
 # Sales-locked customer copy (£ is latin-1 U+00A3 - safe for Helvetica PDF).
-# NOTE: £5-20 pricing line removed per Kieran's approval (2026-10-18 website plan).
-# Wave-2 cold emails link to the report page with a "book a call" CTA instead.
-DEEPER_INSIGHTS_LEAD = "Reply if any of these would help."
+# NOTE: Pricing removed; book-a-call CTA instead (2026-10-24).
+DEEPER_INSIGHTS_LEAD = (
+    f"Want to talk it through? Book a free 15-minute call: {BOOKING_LINK}, "
+    "or just reply to this email."
+)
 
 INDEX_NOTE = (
     "Visibility = how often you appear in these replies. "

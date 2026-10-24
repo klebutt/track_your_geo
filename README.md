@@ -293,6 +293,61 @@ The `site/` directory contains the AI Recommend marketing website and per-firm r
 Optionally add photo to `site/public/images/`:
 - `kieran.jpg` - Kieran's photo (site renders fine without it)
 
+### Generating a batch of reports
+
+Use `scripts/batch_export.py` to generate PDF reports for a list of firms. The script runs probes via the local API, exports PDFs, and writes a manifest that `site/build.py` can consume directly.
+
+**Prerequisites:**
+- Local API running (see [Quick start](#quick-start-windows))
+- Input CSV with `firm_name,url` columns
+
+**Input CSV format:**
+```csv
+firm_name,url
+"Example Accountants Ltd","https://example-accountants.co.uk"
+"Test & Partners","https://testandpartners.example"
+```
+
+**Windows PowerShell commands:**
+
+```powershell
+# Terminal 1: Start the local API
+.\tygeo-venv\Scripts\uvicorn.exe tygeo.main:app --host 127.0.0.1 --port 8000
+
+# Terminal 2: Run the batch (example for wave2)
+# First, do a dry run to see what would happen:
+.\tygeo-venv\Scripts\python.exe scripts/batch_export.py `
+    --batch wave2 `
+    --input "G:\My Drive\Obsidian\projects\track-your-geo\reports\wave2-urls.csv" `
+    --dry-run
+
+# Then run for real:
+.\tygeo-venv\Scripts\python.exe scripts/batch_export.py `
+    --batch wave2 `
+    --input "G:\My Drive\Obsidian\projects\track-your-geo\reports\wave2-urls.csv"
+
+# After batch completes, build the site:
+python site/build.py --vault "G:\My Drive\Obsidian\projects\track-your-geo" --batch wave2
+
+# Deploy to Cloudflare Pages:
+npx wrangler pages deploy site/dist --project-name airecommend
+```
+
+**Output (in vault):**
+- `reports/wave2-manifest.csv` — manifest for `site/build.py`
+- `reports/wave2-errors.csv` — failed/excluded firms
+- `reports/wave2-progress.md` — live progress file
+- `reports/wave2-pdfs/` — PDF and markdown files
+
+**Useful options:**
+- `--dry-run` — show what would happen without running probes
+- `--reuse-completed` — skip firms with existing PDFs (default: True)
+- `--force` — regenerate even if PDF exists
+- `--limit N` — process only first N firms
+- `--offset N` — skip first N firms
+
+**Cost and time:** Approximately **$0.65 per firm** and **15 minutes per firm** (3-model probes with OpenAI search rate limits).
+
 ### Building the site
 
 **Public pages only (for testing):**
