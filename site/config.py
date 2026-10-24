@@ -2,7 +2,7 @@
 
 PLACEHOLDERS FOR KIERAN TO FILL IN:
 ====================================
-1. BOOKING_LINK - Google Calendar 15-min appointment URL
+1. BOOKING_LINK - Cal.com or Calendly 15-min event URL
 2. KIERAN_PHONE - Kieran's phone number (optional, can be empty string)
 3. CONTACT_ADDRESS - Business contact address (optional, can be empty string)
 4. TRADING_NAME_LINE - Trading name/company line for footer

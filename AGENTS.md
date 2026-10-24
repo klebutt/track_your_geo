@@ -71,12 +71,12 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 *Updated 2026-10-24*
 
 - **Phase:** Wave 2 prep. Wave 1 closed (~50 PDF reports emailed Sept, 47 bumps 7–12 Oct, 0 real replies).
-- **In flight:** generic batch runner PR (replaces `scripts/wave1_*_export.py` for new batches; runs on Kieran's PC).
+- **In flight:** `scripts/batch_export.py` (PR #3) — generic batch runner for new batches; runs on Kieran's PC.
 - **Next (in order):**
-  1. Merge batch runner → Kieran runs ~20 new **Ltd/LLP** accountancy reports (no sole traders/partnerships: PECR)
+  1. Merge batch runner → Kieran runs 30 new **private limited company** accountancy reports (no sole traders/partnerships/LLPs: PECR)
   2. Build private `/r/<slug>/` pages with `site/build.py` (hash-gate hosted PDF vs vault PDF; `wave2-links.csv` stays in vault)
-  3. Kieran deploys (`wrangler pages deploy site/dist --project-name airecommend`)
-- **Shipped 24 Oct:** `site/` live at https://airecommend.co.uk (Cloudflare Pages `airecommend`, D1 `airecommend-log` logs `/r/*` opens). PR #1 site, PR #2 PECR privacy wording. CTA = 15-min Google Calendar booking link. Footer: "AI Recommend is a trading name of Kieran Le Butt".
+  3. Kieran deploys (`cd site; npx wrangler pages deploy dist --project-name airecommend --branch main`)
+- **Shipped 24 Oct:** `site/` live at https://airecommend.co.uk (Cloudflare Pages `airecommend`, D1 `airecommend-log` logs `/r/*` opens). PR #1 site, PR #2 PECR privacy wording. Report CTA = "Book a free 15-minute call … or email kieran@airecommend.co.uk" (link in `apps/api/tygeo/brand.py`). Footer: "AI Recommend is a trading name of Kieran Le Butt".
 - **Live app:** https://track-your-geo.vercel.app/ (Railway API https://trackyourgeo-production.up.railway.app currently returns 404; parked)
 - **Locked:** `gpt-5-search-api` + Perplexity + Gemini (3-model); no prices in reports/site/email for wave 2; no prospect data or report output in git (`site/dist/` gitignored).
 - **Not for agents:** deploys, DNS, prospect emails. Kieran only. See [Working through Grok Bot](docs/ways-of-working.md#working-through-grok-bot).
