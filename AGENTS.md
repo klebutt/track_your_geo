@@ -4,7 +4,7 @@ Track Your GEO: deployed MVP for GEO visibility probing. Agents collaborate with
 
 ## Cursor vs Obsidian
 
-This **repo** is the build system (code, OpenSpec, worklogs, formula). The **Obsidian vault** is the thinking system (strategy, personas, session status). Do not copy OpenSpec, formula, or worklogs into the vault. Full split: [docs/ways-of-working.md](docs/ways-of-working.md). Vault path: `G:\My Drive\Obsidian\projects\track-your-geo\` (start at `status.md`).
+This **repo** is the build system (code, OpenSpec, worklogs, formula). The **Obsidian vault** is the thinking system (strategy, personas, session status). Do not copy OpenSpec, formula, or worklogs into the vault. Full split: [docs/ways-of-working.md](docs/ways-of-working.md). Code-change workflow: [Working through Grok Bot](docs/ways-of-working.md#working-through-grok-bot). Vault path: `G:\My Drive\Obsidian\projects\track-your-geo\` (start at `status.md`).
 
 ## Collaboration workflow
 
@@ -14,7 +14,7 @@ This **repo** is the build system (code, OpenSpec, worklogs, formula). The **Obs
 4. **Spec** — Non-trivial work: OpenSpec propose/explore/apply skills (see `.cursor/skills/openspec-*`). Trivial fixes: skip new change folder.
 5. **Implement** — Small, reviewable diffs; follow approved plan and task list.
 6. **Validate** — `pytest eval -q`; manual UI smoke if UI/API touched; note LLM cost impact.
-7. **Record** — Update [docs/worklog/](docs/worklog/); archive OpenSpec change when done. Remind the human to refresh vault `status.md` if the session goal or live state changed.
+7. **Record** — Update [docs/worklog/](docs/worklog/); archive OpenSpec change when done. Note doc impact in the PR body; Grok Bot updates the vault.
 
 ### Plan (awaiting approval) template
 
@@ -49,7 +49,7 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 ## Testing
 
-- From repo root: `.\tygeo-venv\Scripts\pytest.exe eval -q`
+- From repo root: `pytest eval -q` (or `.\tygeo-venv\Scripts\pytest.exe eval -q` on Windows)
 - Prefer deterministic tests in [eval/](eval/); avoid live LLM in default tests.
 - Manual: API port 8000 + Vite 5173 ([README.md](README.md)).
 
@@ -66,19 +66,19 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 | Active proposals | [openspec/changes/](openspec/changes/) |
 | Session / strategy (vault) | `G:\My Drive\Obsidian\projects\track-your-geo\status.md` |
 
-## Current focus (update by humans; keep in sync with vault `status.md`)
+## Current focus (Grok Bot keeps this in sync with vault `status.md`)
 
-- **Active change:** [wave1-customer-export](openspec/changes/wave1-customer-export/) — shipped; QA-10 + batch-40 complete
-- **Also open:** [report-conversion-quickwins](openspec/changes/report-conversion-quickwins/), [locality-aware-queries](openspec/changes/locality-aware-queries/) — archive when ready
-- **Priorities (in order):**
-  1. BD sheets from vault `cosmetics-qa-10-manifest.csv` + `wave1-batch40-manifest.csv` + `wave1-pdfs/`
-  2. Dedupe batch-40 manifest if needed (earlier dual-runner rows)
-  3. Archive OpenSpec changes when confident
+*Updated 2026-10-24*
 
-- **Live URLs:** Frontend https://track-your-geo.vercel.app/ · API https://trackyourgeo-production.up.railway.app (prod not required)
-- **Context:** [docs/worklog/2026-09-15-batch40-complete.md](docs/worklog/2026-09-15-batch40-complete.md) · [2026-09-13-wave1-customer-export.md](docs/worklog/2026-09-13-wave1-customer-export.md) · vault `decisions/2026-09-13-bulk-probe-economics.md`
-- **OpenAI search TPM:** 6k on `gpt-5-search-api`; pacing keeps 30/30 (~15 min/firm)
-- **Locked:** Option A full 3-model; do not copy `accountant-prospects` into git
-- **Wave-1:** QA-10 + batch-40 done (batch clean run **40/40 · $26.05 USD · 0 fails**); sendable pack ≈ 50
+- **Phase:** Wave 2 prep. Wave 1 closed (~50 PDF reports emailed Sept, 47 bumps 7–12 Oct, 0 real replies).
+- **In flight:** `scripts/batch_export.py` (PR #3) — generic batch runner for new batches; runs on Kieran's PC.
+- **Next (in order):**
+  1. Merge batch runner → Kieran runs 30 new **private limited company** accountancy reports (no sole traders/partnerships/LLPs: PECR)
+  2. Build private `/r/<slug>/` pages with `site/build.py` (hash-gate hosted PDF vs vault PDF; `wave2-links.csv` stays in vault)
+  3. Kieran deploys (`cd site; npx wrangler pages deploy dist --project-name airecommend --branch main`)
+- **Shipped 24 Oct:** `site/` live at https://airecommend.co.uk (Cloudflare Pages `airecommend`, D1 `airecommend-log` logs `/r/*` opens). PR #1 site, PR #2 PECR privacy wording. Report CTA = "Book a free 15-minute call … or email kieran@airecommend.co.uk" (link in `apps/api/tygeo/brand.py`). Footer: "AI Recommend is a trading name of Kieran Le Butt".
+- **Live app:** https://track-your-geo.vercel.app/ (Railway API https://trackyourgeo-production.up.railway.app currently returns 404; parked)
+- **Locked:** `gpt-5-search-api` + Perplexity + Gemini (3-model); no prices in reports/site/email for wave 2; no prospect data or report output in git (`site/dist/` gitignored).
+- **Not for agents:** deploys, DNS, prospect emails. Kieran only. See [Working through Grok Bot](docs/ways-of-working.md#working-through-grok-bot).
 
 When implementing, align with OpenSpec capabilities and prefer small, reviewable changes.
