@@ -70,13 +70,18 @@ Use a new change when behavior, APIs, or user-visible contracts change materiall
 
 *Updated 2026-10-24*
 
-- **Phase:** Wave 2 prep. Wave 1 closed (~50 PDF reports emailed Sept, 47 bumps 7–12 Oct, 0 real replies).
-- **In flight:** `scripts/batch_export.py` (PR #3) — generic batch runner for new batches; runs on Kieran's PC.
-- **Next (in order):**
-  1. Merge batch runner → Kieran runs 30 new **private limited company** accountancy reports (no sole traders/partnerships/LLPs: PECR)
-  2. Build private `/r/<slug>/` pages with `site/build.py` (hash-gate hosted PDF vs vault PDF; `wave2-links.csv` stays in vault)
-  3. Kieran deploys (`cd site; npx wrangler pages deploy dist --project-name airecommend --branch main`)
+- **Merged today (2026-10-24):** PR #3 (batch runner + CTA), PR #4 (docs refresh), PR #5 (sample report with SAMPLE label)
+- **Live:** https://airecommend.co.uk/sample-report.pdf · www→apex 301 redirect via Cloudflare
+- **Wave-1:** sent; send logs backfilled in vault (125 events, 0 real replies, 1 STOP, 1 bounce, 2 auto-replies); Jeffrey Altman PDF corruption unresolved
+- **Wave-2:** 30 private limited accountancy firms; contacts verified vs Companies House; list + email draft in vault (not in git); shared inboxes get "Hi there"
+- **NEXT (in order):**
+  1. Kieran runs 30-firm batch on his PC (~7.5 h, ~$20): dry run first (`python scripts/batch_export.py --batch wave2 --input <vault>/reports/wave2-urls.csv --vault <vault> --dry-run`), then real run
+  2. `python site/build.py --vault <vault> --batch wave2`, deploy from `site/`
+  3. Fill one-line finding per firm into email; verify every `/r/` link loads
+  4. Run inbox placement test
+  5. Get Kieran's explicit OK before any send
 - **Shipped 24 Oct:** `site/` live at https://airecommend.co.uk (Cloudflare Pages `airecommend`, D1 `airecommend-log` logs `/r/*` opens). PR #1 site, PR #2 PECR privacy wording. Report CTA = "Book a free 15-minute call … or email kieran@airecommend.co.uk" (link in `apps/api/tygeo/brand.py`). Footer: "AI Recommend is a trading name of Kieran Le Butt".
+- **Context:** [docs/worklog/2026-10-24-session-wrap.md](docs/worklog/2026-10-24-session-wrap.md) · vault `decisions/2026-09-13-bulk-probe-economics.md`
 - **Live app:** https://track-your-geo.vercel.app/ (Railway API https://trackyourgeo-production.up.railway.app currently returns 404; parked)
 - **Locked:** `gpt-5-search-api` + Perplexity + Gemini (3-model); no prices in reports/site/email for wave 2; no prospect data or report output in git (`site/dist/` gitignored).
 - **Not for agents:** deploys, DNS, prospect emails. Kieran only. See [Working through Grok Bot](docs/ways-of-working.md#working-through-grok-bot).

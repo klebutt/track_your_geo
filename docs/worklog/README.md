@@ -2,6 +2,7 @@
 
 Session notes: decisions, shipped changes, and suggested follow-ups. New entries: add a dated file `YYYY-MM-DD.md`. Format and agent expectations: [AGENTS.md](../../AGENTS.md) (Collaboration workflow → Record).
 
+- [2026-10-24](2026-10-24-session-wrap.md) — Wave-1 send logs, wave-2 prep (30 firms), PRs #3–#5 merged, sample report live.
 - [2026-10-24](2026-10-24-airecommend-site-live.md) — AI Recommend site live (PR #1 site, PR #2 PECR fix); Cloudflare Pages deploy.
 - [2026-09-15](2026-09-15-batch40-complete.md) — Wave-1 batch-40 complete (40/40, $26.05, 0 fails).
 - [2026-09-13](2026-09-13-wave1-customer-export.md) — Wave-1 customer export shipped (PDF + bundled assets).
