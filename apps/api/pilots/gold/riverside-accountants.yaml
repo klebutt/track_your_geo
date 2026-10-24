@@ -11,9 +11,9 @@ services:
   - bookkeeping
   - limited company accounts
 competitors:
-  - Beever and Struthers
-  - DJH Mitten Clarke
-  - Xeinadin
+  - Northside Partners
+  - Summit Business Services
+  - Clearview Accounting
 queries:
   - What are the best accountants for a small business in {location}? Name specific firms.
   - Best accountant for contractors and freelancers in {location} — list firms by name.

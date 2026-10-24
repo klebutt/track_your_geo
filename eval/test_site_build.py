@@ -396,17 +396,118 @@ class TestFictionalFixtures:
         for domain in pilot.get("brand_domains", []):
             assert ".example" in domain, f"Brand domain {domain} must use .example"
 
+    def test_riverside_accountants_has_fictional_competitors(self):
+        """The gold fixture competitors should all be fictional."""
+        import yaml
+
+        fixture_path = REPO_ROOT / "apps" / "api" / "pilots" / "gold" / "riverside-accountants.yaml"
+        with open(fixture_path) as f:
+            pilot = yaml.safe_load(f)
+
+        real_firms = ["Beever and Struthers", "DJH Mitten Clarke", "Xeinadin"]
+        for comp in pilot.get("competitors", []):
+            assert comp not in real_firms, f"Real firm '{comp}' found in fixture competitors"
+
     def test_no_real_firm_data_in_tests(self):
-        """This test file should not contain real firm names."""
+        """This test file should not contain real firm names outside of test definitions."""
         this_file = Path(__file__).read_text()
         # List of real firms that should never appear in tests
+        # These appear in blocklist definitions within tests, but nowhere else
         real_firms = [
             "Beever and Struthers",
             "DJH Mitten Clarke",
             "Xeinadin",
         ]
         for firm in real_firms:
-            # Allow the firm name in the list definition above
+            # These names appear in blocklist definitions within tests:
+            # - Once in TestFictionalFixtures.test_no_real_firm_data_in_tests
+            # - Once in TestFictionalFixtures.test_riverside_accountants_has_fictional_competitors
+            # - Once in TestSampleReportBuild.test_sample_uses_fictional_competitors
             occurrences = this_file.count(firm)
-            # It appears once in the list above, should not appear elsewhere
-            assert occurrences == 1, f"Real firm '{firm}' found in test file"
+            assert occurrences == 3, f"Real firm '{firm}' count changed ({occurrences}); update if intentional"
+
+
+class TestSampleReportBuild:
+    """Test that sample report is built correctly with proper content."""
+
+    @pytest.fixture
+    def built_sample(self, tmp_path):
+        """Build site with sample and return the dist path."""
+        sys.path.insert(0, str(REPO_ROOT / "site"))
+        from build import copy_public_files, build_sample_report, load_config
+
+        dist = tmp_path / "dist"
+        copy_public_files(dist)
+        config = load_config()
+        build_sample_report(dist, config)
+        return dist
+
+    def test_sample_pdf_exists(self, built_sample):
+        """Default build should produce sample-report.pdf at root."""
+        pdf_path = built_sample / "sample-report.pdf"
+        assert pdf_path.exists(), "sample-report.pdf should exist in dist root"
+        assert pdf_path.stat().st_size > 1000, "PDF should have substantial content"
+
+    def test_sample_page_exists(self, built_sample):
+        """Default build should produce /r/sample/ page."""
+        sample_dir = built_sample / "r" / "sample"
+        assert sample_dir.exists(), "/r/sample/ directory should exist"
+        assert (sample_dir / "index.html").exists(), "/r/sample/index.html should exist"
+
+    def test_sample_pdf_no_reply_if(self, built_sample):
+        """Sample PDF should not contain 'Reply if' CTA (use real CTA instead)."""
+        import subprocess
+
+        pdf_path = built_sample / "sample-report.pdf"
+
+        # Extract text from PDF using pdftotext if available, else check markdown
+        try:
+            result = subprocess.run(
+                ["pdftotext", str(pdf_path), "-"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                pdf_text = result.stdout
+                assert "Reply if" not in pdf_text, \
+                    "Sample PDF should not contain 'Reply if' - use real CTA"
+                return
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # Fallback: check the sample markdown file
+        md_path = built_sample / "r" / "sample" / "index.html"
+        if md_path.exists():
+            html = md_path.read_text()
+            assert "Reply if" not in html, \
+                "Sample page should not contain 'Reply if' - use real CTA"
+
+    def test_sample_has_booking_link(self, built_sample):
+        """Sample should include the real booking link CTA."""
+        html_path = built_sample / "r" / "sample" / "index.html"
+        html = html_path.read_text()
+        # Should have booking link from config
+        assert "calendar.app.google" in html or "Book a" in html, \
+            "Sample should include booking CTA"
+
+    def test_sample_labeled_as_sample(self, built_sample):
+        """Sample report should be clearly labeled as a sample."""
+        html_path = built_sample / "r" / "sample" / "index.html"
+        html = html_path.read_text()
+        assert "SAMPLE" in html.upper(), "Sample report should be labeled as SAMPLE"
+
+    def test_sample_has_noindex(self, built_sample):
+        """Sample report page should have noindex meta tag."""
+        html_path = built_sample / "r" / "sample" / "index.html"
+        html = html_path.read_text()
+        assert "noindex" in html, "/r/sample/ should have noindex meta"
+
+    def test_sample_uses_fictional_competitors(self, built_sample):
+        """Sample should not mention any real firm names."""
+        html_path = built_sample / "r" / "sample" / "index.html"
+        html = html_path.read_text()
+
+        real_firms = ["Beever and Struthers", "DJH Mitten Clarke", "Xeinadin"]
+        for firm in real_firms:
+            assert firm not in html, f"Sample should not mention real firm '{firm}'"

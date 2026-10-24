@@ -43,7 +43,7 @@ def pdf_filename_for_firm(firm: str) -> str:
 def _plain_from_run(run: dict[str, Any]):
     """Always rebuild so export picks up latest Sales-locked copy."""
     snap = run.get("profile_snapshot") or {}
-    return build_plain_report(
+    pr = build_plain_report(
         status=str(run.get("status") or ""),
         brand_name=str(run.get("brand_name") or ""),
         model_name=str(run.get("model_name") or ""),
@@ -51,6 +51,13 @@ def _plain_from_run(run: dict[str, Any]):
         locality_stance=str(snap.get("locality_stance") or "") or None,
         location=str(snap.get("location") or run.get("location") or "") or None,
     )
+
+    # Support for sample report banner (passed via _sample_banner field)
+    sample_banner = run.get("_sample_banner")
+    if sample_banner and pr.what_this_is:
+        pr.what_this_is = f"{sample_banner}\n\n{pr.what_this_is}"
+
+    return pr
 
 
 def _unique_queries(run: dict[str, Any]) -> list[str]:
