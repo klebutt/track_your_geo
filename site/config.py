@@ -17,10 +17,16 @@ Once incorporated, update TRADING_NAME_LINE in apps/api/tygeo/brand.py to:
 # =============================================================================
 # Note: site/build.py adds apps/api to sys.path before importing this module.
 try:
-    from tygeo.brand import BOOKING_LINK, CONTACT_EMAIL, TRADING_NAME_LINE
+    from tygeo.brand import (
+        BOOKING_LINK,
+        BOOKING_LINK_RAW,
+        CONTACT_EMAIL,
+        TRADING_NAME_LINE,
+    )
 except ImportError:
     # Fallback for standalone imports (e.g., scripts that don't set up paths)
-    BOOKING_LINK = "https://calendar.app.google/omsy1ZoJ7SsduLq87"
+    BOOKING_LINK_RAW = "https://calendar.app.google/omsy1ZoJ7SsduLq87"
+    BOOKING_LINK = "https://airecommend.co.uk/book"
     CONTACT_EMAIL = "kieran@airecommend.co.uk"
     TRADING_NAME_LINE = "AI Recommend is a trading name of Kieran Le Butt"
 
