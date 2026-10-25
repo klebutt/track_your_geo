@@ -391,7 +391,7 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
             return
         pdf.set_text_color(*(color or (30, 41, 59)))
         pdf.set_font("Helvetica", style=style, size=size)
-        pdf.multi_cell(0, lh, raw, markdown=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.multi_cell(0, lh, raw, markdown=True, align=Align.L, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         if gap:
             pdf.ln(gap)
 
@@ -443,18 +443,19 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
     if sample_banner:
         callout_y = pdf.get_y()
         callout_text = scrub(sample_banner)
-        pdf.set_font("Helvetica", size=9)
-        callout_h = max(10.0, pdf.multi_cell(
-            page_w - 10, 4.5, callout_text, dry_run=True, output="HEIGHT"
-        ) + 6)
+        pdf.set_font("Helvetica", style="B", size=9)
+        text_h = pdf.multi_cell(
+            page_w - 14, 4.5, callout_text, dry_run=True, output="HEIGHT"
+        )
+        callout_h = text_h + 10  # 5pt padding top + 5pt padding bottom
         # Light blue tinted background (#dbeafe / rgb 219,234,254)
         pdf.set_fill_color(219, 234, 254)
         pdf.rect(pdf.l_margin, callout_y, page_w, callout_h, style="F")
-        pdf.set_xy(pdf.l_margin + 5, callout_y + 3)
+        pdf.set_xy(pdf.l_margin + 7, callout_y + 5)
         pdf.set_text_color(*primary_dark)
         pdf.set_font("Helvetica", style="B", size=9)
-        pdf.multi_cell(page_w - 10, 4.5, callout_text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_y(callout_y + callout_h + 3)
+        pdf.multi_cell(page_w - 14, 4.5, callout_text, align=Align.L, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_y(callout_y + callout_h + 6)  # spacing after callout box
         # Get original what_this_is without the prepended banner
         original_what_this_is = pr.what_this_is
         if original_what_this_is and sample_banner in original_what_this_is:
