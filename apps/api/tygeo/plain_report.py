@@ -53,7 +53,8 @@ DEEPER_INSIGHTS_LEAD = (
 )
 
 INDEX_NOTE = (
-    "Visibility = how often you appear in these replies. "
+    "Mentioned in AI replies = the share of all individual AI replies "
+    "(each question x each model) that named you. "
     "The composite index also reflects how strongly you are recommended, "
     "the tone when you are mentioned, and whether you are cited as a source - "
     "a compass, not a replica of consumer ChatGPT."
