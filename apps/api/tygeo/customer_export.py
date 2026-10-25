@@ -169,7 +169,7 @@ def build_customer_markdown(run: dict[str, Any]) -> str:
         lines.append(f"| Location used | {loc} |")
     if url:
         lines.append(f"| Website | {url} |")
-    lines.append(f"| Visibility (probes with brand name in reply) | **{vis * 100:.0f}%** |")
+    lines.append(f"| Mentioned in AI replies | **{vis * 100:.0f}% of replies** |")
     lines.append(f"| Composite index | **{composite:.1f}** / 100 |")
     labels = customer_model_labels(models)
     if labels:
@@ -418,7 +418,7 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
         write_md(url, size=9, gap=2, color=(71, 85, 105), lh=4.5)
 
     snapshot_rows = [
-        ("Visibility", f"{vis * 100:.0f}%"),
+        ("Mentioned in AI replies", f"{vis * 100:.0f}% of replies"),
         ("Composite", f"{composite:.1f} / 100"),
         ("Models", ", ".join(model_labels) if model_labels else "n/a"),
     ]

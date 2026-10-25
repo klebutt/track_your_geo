@@ -72,7 +72,8 @@ def test_customer_markdown_locks(tmp_path: Path):
     assert "\ufffd" not in md
     assert "£5?20" not in md
     assert "GBP 5?20" not in md
-    assert "how often you appear" in md
+    assert "Mentioned in AI replies" in md
+    assert "of replies" in md
     assert "how strongly you are recommended" in md
     assert "cited as a source" in md
     assert "visibility, position, sentiment" not in md
