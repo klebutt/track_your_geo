@@ -8,6 +8,16 @@ Example:
   python scripts/batch_export.py --batch wave2 --input firms.csv
   python scripts/batch_export.py --batch wave2 --input firms.csv --dry-run
 
+Completion detection (--reuse-completed, on by default):
+  A firm is skipped when the manifest already has a successful (status=ok) record
+  for the same website URL (normalized for scheme, www, trailing slash, case) AND
+  the PDF at the recorded report_path still exists. Removing a PDF forces re-run.
+
+Manifest deduplication:
+  --dedupe-manifest  Collapse an existing manifest to one row per URL, keeping
+                     the most recent ok row. Useful after reruns that added
+                     duplicate entries.
+
 Output layout (in vault):
   reports/<batch>-manifest.csv   - manifest for site/build.py
   reports/<batch>-errors.csv     - failed/excluded firms
@@ -22,12 +32,14 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import sys
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO = Path(__file__).resolve().parents[1]
 API_ROOT = REPO / "apps" / "api"
@@ -69,6 +81,106 @@ ERROR_FIELDS = [
     "run_id",
     "generated_at",
 ]
+
+
+def normalize_url(url: str) -> str:
+    """Normalize URL for comparison: lowercase, no scheme, no www, no trailing slash."""
+    url = (url or "").strip().lower()
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    host = parsed.netloc or parsed.path.split("/")[0]
+    host = re.sub(r"^www\.", "", host)
+    path = parsed.path.rstrip("/")
+    if not parsed.netloc:
+        path = "/" + "/".join(parsed.path.split("/")[1:])
+        path = path.rstrip("/")
+    return f"{host}{path}" if path else host
+
+
+def load_manifest(path: Path) -> list[dict]:
+    """Load manifest CSV into list of dicts. Returns empty list if file doesn't exist."""
+    if not path.exists():
+        return []
+    rows = []
+    with path.open(encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            rows.append(row)
+    return rows
+
+
+def build_completion_index(manifest: list[dict]) -> dict[str, dict]:
+    """Build lookup of normalized URL -> most recent ok row.
+
+    Returns dict mapping normalized URL to the row dict for firms that are done
+    (status=ok and PDF still exists at report_path).
+    """
+    index: dict[str, dict] = {}
+    for row in manifest:
+        if row.get("status") != "ok":
+            continue
+        url_key = normalize_url(row.get("url") or "")
+        if not url_key:
+            continue
+        report_path = row.get("report_path") or ""
+        if report_path and Path(report_path).exists():
+            index[url_key] = row
+    return index
+
+
+def write_manifest(path: Path, rows: list[dict]) -> None:
+    """Write manifest CSV from list of dicts, preserving field order."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=MANIFEST_FIELDS, extrasaction="ignore")
+        w.writeheader()
+        for row in rows:
+            w.writerow(row)
+
+
+def update_manifest_row(manifest: list[dict], new_row: dict) -> list[dict]:
+    """Add or replace a row in the manifest by normalized URL.
+
+    If the URL already exists, replaces that row. Otherwise appends.
+    Returns the updated manifest list.
+    """
+    url_key = normalize_url(new_row.get("url") or "")
+    if not url_key:
+        manifest.append(new_row)
+        return manifest
+
+    for i, existing in enumerate(manifest):
+        if normalize_url(existing.get("url") or "") == url_key:
+            manifest[i] = new_row
+            return manifest
+    manifest.append(new_row)
+    return manifest
+
+
+def dedupe_manifest(manifest: list[dict]) -> list[dict]:
+    """Collapse manifest to one row per URL, keeping the most recent ok row.
+
+    For each URL:
+    - If there's an ok row, keep the last one
+    - If no ok rows, keep the last row regardless of status
+    """
+    by_url: dict[str, list[tuple[int, dict]]] = {}
+    for i, row in enumerate(manifest):
+        url_key = normalize_url(row.get("url") or "")
+        if url_key not in by_url:
+            by_url[url_key] = []
+        by_url[url_key].append((i, row))
+
+    result: list[tuple[int, dict]] = []
+    for url_key, entries in by_url.items():
+        ok_entries = [(i, r) for i, r in entries if r.get("status") == "ok"]
+        if ok_entries:
+            result.append(ok_entries[-1])
+        else:
+            result.append(entries[-1])
+
+    result.sort(key=lambda x: x[0])
+    return [r for _, r in result]
 
 
 def _now() -> str:
@@ -195,6 +307,9 @@ def run_batch(
     errors_path = vault / "reports" / f"{batch}-errors.csv"
     jsonl_path = vault / "reports" / f"{batch}-run-log.jsonl"
 
+    manifest = load_manifest(manifest_path)
+    completion_index = build_completion_index(manifest) if reuse_completed else {}
+
     if dry_run:
         print(f"DRY RUN: would process {len(jobs)} firms", flush=True)
         print(f"  Output dir: {out_dir}", flush=True)
@@ -202,13 +317,38 @@ def run_batch(
         print(f"  Estimated cost: ${len(jobs) * COST_PER_FIRM_USD:.2f} USD", flush=True)
         print(f"  Estimated time: ~{len(jobs) * MINUTES_PER_FIRM:.0f} minutes", flush=True)
         print("\nFirms to process:", flush=True)
+        queue_count = 0
+        skip_count = 0
         for firm, url in jobs:
-            pdf_name = pdf_filename_for_firm(firm)
-            pdf_path = out_dir / pdf_name
-            exists = pdf_path.exists() if out_dir.exists() else False
-            skip = exists and reuse_completed and not force
-            status = "SKIP (exists)" if skip else "QUEUE"
-            print(f"  [{status}] {firm} ({url})", flush=True)
+            url_key = normalize_url(url)
+            existing = completion_index.get(url_key)
+            if existing and reuse_completed and not force:
+                existing_firm = existing.get("firm", "?")
+                existing_path = existing.get("report_path", "?")
+                print(
+                    f"  [SKIP] {firm} ({url}) — URL matches existing report for "
+                    f"'{existing_firm}' at {existing_path}",
+                    flush=True,
+                )
+                skip_count += 1
+            else:
+                reason = ""
+                if force:
+                    reason = " (--force)"
+                elif not reuse_completed:
+                    reason = " (--no-reuse-completed)"
+                print(f"  [QUEUE] {firm} ({url}){reason}", flush=True)
+                queue_count += 1
+        print(f"\nSummary: {queue_count} to run, {skip_count} to skip", flush=True)
+        if queue_count > 0:
+            print(
+                f"Estimated cost for queued: ~${queue_count * COST_PER_FIRM_USD:.2f} USD",
+                flush=True,
+            )
+            print(
+                f"Estimated time for queued: ~{queue_count * MINUTES_PER_FIRM:.0f} minutes",
+                flush=True,
+            )
         return 0
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -236,8 +376,6 @@ def run_batch(
     )
 
     for idx, (firm, url) in enumerate(jobs, 1):
-        pdf_name = pdf_filename_for_firm(firm)
-        pdf_path = out_dir / pdf_name
         print(f"[{idx}/{total}] START {firm} · {url}", flush=True)
 
         write_progress(
@@ -253,26 +391,34 @@ def run_batch(
             eta=f"~{(total - idx + 1) * MINUTES_PER_FIRM:.0f} min",
         )
 
-        if pdf_path.exists() and reuse_completed and not force:
-            h = sha256_file(pdf_path)
-            gen = datetime.fromtimestamp(pdf_path.stat().st_mtime, tz=timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
-            row = {
-                "firm": firm,
-                "url": url,
-                "report_path": str(pdf_path),
-                "generated_at": gen,
-                "run_cost_gbp": "",
-                "sha256": h,
-                "status": "ok",
-            }
-            append_csv(manifest_path, row, MANIFEST_FIELDS)
+        url_key = normalize_url(url)
+        existing = completion_index.get(url_key)
+        if existing and reuse_completed and not force:
+            existing_firm = existing.get("firm", firm)
+            existing_path = existing.get("report_path", "")
+            h = existing.get("sha256", "")
+            gen = existing.get("generated_at", "")
             with jsonl_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps({**row, "status": "reused_pdf"}, ensure_ascii=False) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "firm": existing_firm,
+                            "url": url,
+                            "report_path": existing_path,
+                            "generated_at": gen,
+                            "sha256": h,
+                            "status": "reused_url_match",
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
             skipped += 1
             done_ok += 1
-            print(f"  SKIP existing PDF: {pdf_name}", flush=True)
+            print(
+                f"  SKIP URL match: existing report for '{existing_firm}' at {existing_path}",
+                flush=True,
+            )
             continue
 
         err_row = {
@@ -324,7 +470,9 @@ def run_batch(
                 "sha256": h,
                 "status": "ok",
             }
-            append_csv(manifest_path, row, MANIFEST_FIELDS)
+            manifest = update_manifest_row(manifest, row)
+            write_manifest(manifest_path, manifest)
+            completion_index[url_key] = row
             with jsonl_path.open("a", encoding="utf-8") as f:
                 f.write(
                     json.dumps(
@@ -415,6 +563,31 @@ def run_batch(
     return 0 if failed == 0 or done_ok > 0 else 1
 
 
+def run_dedupe_manifest(manifest_path: Path) -> int:
+    """Dedupe an existing manifest to one row per URL. Returns exit code."""
+    if not manifest_path.exists():
+        print(f"ERROR: Manifest not found: {manifest_path}", flush=True)
+        return 2
+
+    manifest = load_manifest(manifest_path)
+    original_count = len(manifest)
+    deduped = dedupe_manifest(manifest)
+    deduped_count = len(deduped)
+    removed = original_count - deduped_count
+
+    if removed == 0:
+        print(f"No duplicates found in {manifest_path} ({original_count} rows)", flush=True)
+        return 0
+
+    write_manifest(manifest_path, deduped)
+    print(
+        f"Deduped {manifest_path}: {original_count} → {deduped_count} rows "
+        f"({removed} duplicates removed)",
+        flush=True,
+    )
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Generic batch report exporter for AI Recommend",
@@ -427,8 +600,22 @@ Example usage:
   # Run full batch
   python scripts/batch_export.py --batch wave2 --input firms.csv
 
-  # Resume with existing PDFs reused
-  python scripts/batch_export.py --batch wave2 --input firms.csv --reuse-completed
+  # Resume: skips firms whose URL already has a successful report
+  python scripts/batch_export.py --batch wave2 --input firms.csv
+
+  # Force re-run all firms (ignore existing reports)
+  python scripts/batch_export.py --batch wave2 --input firms.csv --force
+
+  # Dedupe an existing manifest (remove duplicate URL rows)
+  python scripts/batch_export.py --batch wave2 --dedupe-manifest --vault /path/to/vault
+
+Completion detection (--reuse-completed, on by default):
+  A firm is skipped when the batch manifest already has a successful (status=ok)
+  record for the same website URL (normalized for scheme, www, trailing slash,
+  case) AND the PDF at the recorded report_path still exists. This means:
+  - Name mismatches between CSV and inferred brand are handled correctly
+  - Deleting a PDF forces that firm to be re-run
+  - Re-running a firm replaces (not duplicates) its manifest row
 
 Input CSV format:
   firm_name,url
@@ -444,8 +631,13 @@ Input CSV format:
     ap.add_argument(
         "--input",
         type=Path,
-        required=True,
-        help="Path to CSV with firm_name,url columns",
+        default=None,
+        help="Path to CSV with firm_name,url columns (not required for --dedupe-manifest)",
+    )
+    ap.add_argument(
+        "--dedupe-manifest",
+        action="store_true",
+        help="Dedupe existing manifest to one row per URL (keeps most recent ok row)",
     )
     ap.add_argument(
         "--vault",
@@ -474,7 +666,12 @@ Input CSV format:
         "--reuse-completed",
         action="store_true",
         default=True,
-        help="Skip firms with existing PDFs (default: True)",
+        help="Skip firms whose URL already has a successful report (default: True)",
+    )
+    ap.add_argument(
+        "--no-reuse-completed",
+        action="store_true",
+        help="Don't skip completed firms (re-run all, but still replace manifest rows)",
     )
     ap.add_argument(
         "--force",
@@ -487,6 +684,14 @@ Input CSV format:
         help="Print what would be done without running probes",
     )
     args = ap.parse_args()
+
+    if args.dedupe_manifest:
+        manifest_path = args.vault / "reports" / f"{args.batch}-manifest.csv"
+        return run_dedupe_manifest(manifest_path)
+
+    if args.input is None:
+        print("ERROR: --input is required (unless using --dedupe-manifest)", flush=True)
+        return 2
 
     if not args.input.exists():
         print(f"ERROR: Input CSV not found: {args.input}", flush=True)
@@ -504,6 +709,8 @@ Input CSV format:
     if not batch_jobs:
         print("ERROR: No jobs after applying offset/limit", flush=True)
         return 2
+
+    reuse_completed = args.reuse_completed and not args.no_reuse_completed
 
     print(f"Loaded {len(jobs)} firms from {args.input}", flush=True)
     print(f"After offset={args.offset}, limit={args.limit}: {len(batch_jobs)} to process", flush=True)
@@ -526,7 +733,7 @@ Input CSV format:
         jobs=batch_jobs,
         vault=args.vault,
         base_url=args.base_url,
-        reuse_completed=args.reuse_completed,
+        reuse_completed=reuse_completed,
         force=args.force,
         dry_run=args.dry_run,
     )
