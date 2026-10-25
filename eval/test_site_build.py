@@ -381,6 +381,37 @@ class TestPublicPageContent:
         assert "no-referrer" in headers.lower()
 
 
+class TestBookingRedirect:
+    """Test /book redirect configuration."""
+
+    def test_redirects_file_generated(self, tmp_path):
+        """Build should generate _redirects file with /book redirect."""
+        sys.path.insert(0, str(REPO_ROOT / "site"))
+        from build import copy_public_files, load_config
+
+        dist = tmp_path / "dist"
+        config = load_config()
+        copy_public_files(dist, config)
+
+        redirects_path = dist / "_redirects"
+        assert redirects_path.exists(), "_redirects should be generated"
+        redirects = redirects_path.read_text()
+        assert "/book" in redirects
+        assert "calendar.app.google" in redirects
+        assert "302" in redirects
+
+    def test_booking_link_single_source(self):
+        """Booking URLs should be defined in brand.py as single source."""
+        sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
+        from tygeo import brand
+
+        assert hasattr(brand, "BOOKING_LINK_RAW"), "brand.py should have BOOKING_LINK_RAW"
+        assert hasattr(brand, "BOOKING_SHORT_URL"), "brand.py should have BOOKING_SHORT_URL"
+        assert hasattr(brand, "BOOKING_LINK"), "brand.py should have BOOKING_LINK"
+        assert "calendar.app.google" in brand.BOOKING_LINK_RAW
+        assert "airecommend.co.uk/book" in brand.BOOKING_SHORT_URL
+
+
 class TestFictionalFixtures:
     """Verify that only fictional data is used in tests and samples."""
 

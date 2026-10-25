@@ -43,12 +43,12 @@ class PlainReportOut(BaseModel):
     index_note: str | None = None
 
 
-from tygeo.brand import BOOKING_LINK, CONTACT_EMAIL
+from tygeo.brand import BOOKING_LINK, CONTACT_EMAIL, SITE_DOMAIN
 
 # Sales-locked customer copy (£ is latin-1 U+00A3 - safe for Helvetica PDF).
 # NOTE: Pricing removed; book-a-call CTA instead (2026-10-24).
 DEEPER_INSIGHTS_LEAD = (
-    f"Want to talk it through? Book a free 15-minute call: {BOOKING_LINK}, "
+    f"Want to talk it through? Book a free 15-minute call at {SITE_DOMAIN}/book, "
     f"or email {CONTACT_EMAIL}."
 )
 

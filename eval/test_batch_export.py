@@ -250,9 +250,10 @@ class TestCTAText:
     """Test CTA text content."""
 
     def test_cta_has_booking_link(self):
-        """CTA should include booking link."""
-        from tygeo.plain_report import DEEPER_INSIGHTS_LEAD, BOOKING_LINK
-        assert BOOKING_LINK in DEEPER_INSIGHTS_LEAD
+        """CTA should include booking short URL (domain/book format)."""
+        from tygeo.plain_report import DEEPER_INSIGHTS_LEAD, SITE_DOMAIN
+        # CTA uses readable short form: airecommend.co.uk/book (not full https:// URL)
+        assert f"{SITE_DOMAIN}/book" in DEEPER_INSIGHTS_LEAD
 
     def test_cta_has_book_a_call_text(self):
         """CTA should mention booking a call."""

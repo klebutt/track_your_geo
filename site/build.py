@@ -56,6 +56,10 @@ def load_config() -> dict:
             spec.loader.exec_module(config_module)
             return {
                 "booking_link": getattr(config_module, "BOOKING_LINK", "PLACEHOLDER_BOOKING_LINK"),
+                "booking_link_raw": getattr(
+                    config_module, "BOOKING_LINK_RAW",
+                    "https://calendar.app.google/omsy1ZoJ7SsduLq87"
+                ),
                 "contact_address": getattr(config_module, "CONTACT_ADDRESS", ""),
                 "contact_email": getattr(config_module, "CONTACT_EMAIL", "kieran@airecommend.co.uk"),
                 "trading_name_line": getattr(config_module, "TRADING_NAME_LINE", "PLACEHOLDER_TRADING_NAME_LINE"),
@@ -65,6 +69,7 @@ def load_config() -> dict:
 
     return {
         "booking_link": "PLACEHOLDER_BOOKING_LINK",
+        "booking_link_raw": "https://calendar.app.google/omsy1ZoJ7SsduLq87",
         "contact_address": "PLACEHOLDER_CONTACT_ADDRESS",
         "contact_email": "kieran@airecommend.co.uk",
         "trading_name_line": "PLACEHOLDER_TRADING_NAME_LINE",
@@ -120,12 +125,23 @@ def escape_html(text: str) -> str:
     )
 
 
-def copy_public_files(dist: Path) -> None:
-    """Copy all files from public/ to dist/."""
+def copy_public_files(dist: Path, config: dict | None = None) -> None:
+    """Copy all files from public/ to dist/ and generate dynamic redirects."""
     if dist.exists():
         shutil.rmtree(dist)
     shutil.copytree(PUBLIC_DIR, dist)
     print(f"Copied public/ to {dist}")
+
+    # Generate _redirects file with booking URL from config
+    if config and config.get("booking_link_raw"):
+        redirects_content = f"""# Cloudflare Pages redirects
+# https://developers.cloudflare.com/pages/configuration/redirects/
+
+# Short booking URL -> Google Calendar appointment
+/book {config['booking_link_raw']} 302
+"""
+        (dist / "_redirects").write_text(redirects_content, encoding="utf-8")
+        print(f"Generated _redirects with /book -> {config['booking_link_raw']}")
 
 
 def build_report_page(
@@ -401,7 +417,7 @@ def main() -> int:
     dist = args.dist.resolve()
 
     print(f"Building site to {dist}")
-    copy_public_files(dist)
+    copy_public_files(dist, config)
 
     # Build sample report by default (required for /sample-report.pdf link on homepage)
     if not args.no_sample:

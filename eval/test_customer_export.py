@@ -153,3 +153,53 @@ def test_pdf_has_no_raw_markdown_markers(tmp_path: Path):
     # Heading appears once
     assert text.lower().count("your ai recommendation report") == 1
     assert "OpenAI search" in text
+
+
+def test_pdf_has_run_date(tmp_path: Path):
+    """PDF should use run date from run data, not build date."""
+    from pypdf import PdfReader
+
+    run = _sample_run(created_at="2026-10-15T10:30:00Z")
+    meta = export_customer_report(run, tmp_path)
+    reader = PdfReader(meta["pdf_path"])
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    assert "15 October 2026" in text
+
+
+def test_pdf_header_has_firm_name(tmp_path: Path):
+    """PDF header right side should show firm name."""
+    from pypdf import PdfReader
+
+    meta = export_customer_report(_sample_run(), tmp_path)
+    reader = PdfReader(meta["pdf_path"])
+    # Check the first page header area (firm name appears in header)
+    first_page = reader.pages[0].extract_text() or ""
+    # Firm name should appear (in header and in title block)
+    assert first_page.count("Hewitt Accountancy") >= 2
+
+
+def test_pdf_sample_callout_box(tmp_path: Path):
+    """Sample report should have the SAMPLE banner text."""
+    from pypdf import PdfReader
+
+    run = _sample_run(
+        _sample_banner="SAMPLE REPORT - This uses fictional data for demonstration."
+    )
+    meta = export_customer_report(run, tmp_path)
+    reader = PdfReader(meta["pdf_path"])
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    assert "SAMPLE REPORT" in text
+    assert "fictional data" in text
+
+
+def test_pdf_booking_short_url_in_cta(tmp_path: Path):
+    """PDF CTA should use short booking URL (airecommend.co.uk/book)."""
+    from pypdf import PdfReader
+
+    meta = export_customer_report(_sample_run(), tmp_path)
+    reader = PdfReader(meta["pdf_path"])
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    # CTA should have the short URL, not the raw Google Calendar URL
+    assert "airecommend.co.uk/book" in text
+    # Should not have raw Google Calendar URL visible
+    assert "calendar.app.google" not in text
