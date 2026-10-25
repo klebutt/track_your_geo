@@ -95,7 +95,8 @@ def test_plain_report_mixed_wins_and_competitor_losses():
     assert "15-minute" in report.deeper_insights_lead or "15 minute" in report.deeper_insights_lead
     assert "email" in report.deeper_insights_lead.lower()
     assert report.index_note
-    assert "how often you appear" in report.index_note.lower()
+    assert "mentioned in ai replies" in report.index_note.lower()
+    assert "each question x each model" in report.index_note.lower()
     assert "cited as a source" in report.index_note.lower()
     assert "compass" in report.index_note.lower()
     assert "gpt-5-search-api" not in (report.models_note or "")
