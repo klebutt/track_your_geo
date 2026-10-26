@@ -63,6 +63,7 @@ def prepare_run_for_customer_export(
     *,
     display_name: str | None = None,
     location: str | None = None,
+    use_export_report_date: bool = False,
 ) -> dict[str, Any]:
     """Shallow copy with export-only overrides (does not change stored probe matching)."""
     out = dict(run)
@@ -74,16 +75,26 @@ def prepare_run_for_customer_export(
         snap["location"] = loc
         out["location"] = loc
     out["profile_snapshot"] = snap
+    if use_export_report_date:
+        out["_report_export_date"] = datetime.now(timezone.utc).isoformat()
     return out
+
+
+def format_query_display(query: str) -> str:
+    """Normalize dashes and whitespace for customer-facing question lists."""
+    s = (query or "").replace(EM_DASH, " - ").replace("\u2013", " - ")
+    s = re.sub(r"\s*-\s*", " - ", s)
+    s = re.sub(r" +", " ", s)
+    return s.strip()
 
 
 def _plain_from_run(run: dict[str, Any]):
     """Always rebuild so export picks up latest Sales-locked copy."""
     snap = run.get("profile_snapshot") or {}
-    brand = export_brand_name(run)
+    display_label = export_brand_name(run)
     pr = build_plain_report(
         status=str(run.get("status") or ""),
-        brand_name=brand,
+        brand_name=prose_brand(display_label),
         model_name=str(run.get("model_name") or ""),
         query_results=list(run.get("query_results") or []),
         locality_stance=str(snap.get("locality_stance") or "") or None,
@@ -125,8 +136,8 @@ def build_customer_markdown(run: dict[str, Any]) -> str:
     if not pr.ready:
         raise ValueError("plain_report not ready for export")
 
-    brand = export_brand_name(run)
-    prose = prose_brand(brand)
+    display_label = export_brand_name(run)
+    prose = prose_brand(display_label)
     snap = run.get("profile_snapshot") or {}
     loc = str(snap.get("location") or run.get("location") or "").strip()
     url = str(run.get("source_url") or snap.get("source_url") or "").strip()
@@ -135,7 +146,7 @@ def build_customer_markdown(run: dict[str, Any]) -> str:
     models = str(run.get("model_name") or "")
 
     lines: list[str] = []
-    lines.append(f"# AI recommendation report - {brand}")
+    lines.append(f"# AI recommendation report - {display_label}")
     lines.append("")
     lines.append("## Your AI recommendation report")
     lines.append("")
@@ -203,7 +214,7 @@ def build_customer_markdown(run: dict[str, Any]) -> str:
     lines.append("")
     lines.append("| | |")
     lines.append("|--|--|")
-    lines.append(f"| Firm | {brand} |")
+    lines.append(f"| Firm | {display_label} |")
     if loc:
         lines.append(f"| Location used | {loc} |")
     if url:
@@ -228,7 +239,7 @@ def build_customer_markdown(run: dict[str, Any]) -> str:
         lines.append("## Questions we asked (brand-neutral)")
         lines.append("")
         for i, q in enumerate(queries, 1):
-            lines.append(f"{i}. {_no_em(q)}")
+            lines.append(f"{i}. {_no_em(format_query_display(q))}")
         lines.append("")
 
     body = "\n".join(lines).strip() + "\n"
@@ -331,9 +342,9 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
     if not pr.ready:
         raise ValueError("plain_report not ready for PDF export")
 
-    brand = export_brand_name(run) if run.get("profile_snapshot") or run.get("brand_name") else firm
-    brand = brand.strip() or firm
-    prose = prose_brand(brand)
+    display_label = export_brand_name(run) if run.get("profile_snapshot") or run.get("brand_name") else firm
+    display_label = display_label.strip() or firm
+    prose = prose_brand(display_label)
     snap = run.get("profile_snapshot") or {}
     loc = str(snap.get("location") or run.get("location") or "").strip()
     url = str(run.get("source_url") or snap.get("source_url") or "").strip()
@@ -363,7 +374,7 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
         )
         return out.encode("latin-1", "ignore").decode("latin-1")
 
-    header_firm_name = scrub(brand)
+    header_firm_name = scrub(display_label)
 
     class _BrandedPDF(FPDF):
         """A4 report with AI Recommend wordmark header and domain/page footer."""
@@ -442,8 +453,13 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
         write_md(text, size=size, style="B", gap=gap, color=primary_dark)
 
     # Cover / title block: tinted panel with brand accent bar
-    # Use run date if available, otherwise fall back to build date
-    run_date_raw = run.get("created_at") or run.get("run_date") or run.get("started_at")
+    # Regenerated exports use export date; otherwise original run date.
+    run_date_raw = (
+        run.get("_report_export_date")
+        or run.get("created_at")
+        or run.get("run_date")
+        or run.get("started_at")
+    )
     if run_date_raw:
         if isinstance(run_date_raw, str):
             try:
@@ -471,7 +487,7 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
     pdf.set_x(inner_x)
     pdf.set_text_color(15, 23, 42)
     pdf.set_font("Helvetica", style="B", size=18)
-    pdf.cell(0, 9, scrub(brand), new_x=XPos.LEFT, new_y=YPos.NEXT)
+    pdf.cell(0, 9, scrub(display_label), new_x=XPos.LEFT, new_y=YPos.NEXT)
     pdf.set_x(inner_x)
     pdf.set_text_color(*muted)
     pdf.set_font("Helvetica", size=9)
@@ -567,6 +583,17 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
 
     if pr.models_note:
         section_break(3)
+        pdf.set_font("Helvetica", size=9)
+        note_h = pdf.multi_cell(
+            0,
+            5,
+            scrub(_to_fpdf_markdown(pr.models_note)).strip(),
+            markdown=True,
+            dry_run=True,
+            output="HEIGHT",
+        )
+        if pdf.get_y() + note_h > pdf.page_break_trigger:
+            pdf.add_page()
         write_md(pr.models_note, size=9, gap=0, color=(100, 116, 139), lh=5)
 
     section_break(6)
@@ -631,7 +658,13 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
         section_break(4)
         heading("Questions we asked (brand-neutral)", size=11, gap=2)
         for i, q in enumerate(queries, 1):
-            write_md(f"{i}. {_no_em(q)}", size=9, gap=0.8, lh=4.8, color=(71, 85, 105))
+            write_md(
+                f"{i}. {_no_em(format_query_display(q))}",
+                size=9,
+                gap=0.8,
+                lh=4.8,
+                color=(71, 85, 105),
+            )
 
     section_break(4)
     pdf.set_text_color(100, 116, 139)
@@ -650,19 +683,19 @@ def export_customer_report(
     also_markdown: bool = True,
 ) -> dict[str, Any]:
     """Write PDF (+ optional .md) into out_dir. Returns paths and meta."""
-    brand = export_brand_name(run)
+    display_label = export_brand_name(run)
     md = build_customer_markdown(run)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    pdf_name = pdf_filename_for_firm(brand)
+    pdf_name = pdf_filename_for_firm(display_label)
     pdf_path = out_dir / pdf_name
-    write_customer_pdf(run, pdf_path, firm=brand)
+    write_customer_pdf(run, pdf_path, firm=display_label)
     md_path = None
     if also_markdown:
         md_path = out_dir / pdf_name.replace(".pdf", ".md")
         md_path.write_text(md, encoding="utf-8")
     return {
-        "firm": brand,
+        "firm": display_label,
         "pdf_path": str(pdf_path),
         "md_path": str(md_path) if md_path else None,
         "pdf_filename": pdf_name,

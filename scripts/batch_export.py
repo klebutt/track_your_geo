@@ -428,12 +428,15 @@ def _export_run(
     run: dict,
     job: BatchJob,
     out_dir: Path,
+    *,
+    use_export_report_date: bool = False,
 ) -> dict:
     """Apply export overrides and write customer PDF (+ md)."""
     run = prepare_run_for_customer_export(
         run,
-        display_name=job.display_name,
+        display_name=job.manifest_firm,
         location=job.location,
+        use_export_report_date=use_export_report_date,
     )
     return export_customer_report(run, out_dir)
 
@@ -681,7 +684,9 @@ def run_batch(
                     )
                 prior = completion_index.get(url_key) or {}
                 cost_usd = float(prior.get("run_cost_gbp") or 0.0) / USD_TO_GBP
-                meta = _export_run(run, job, out_dir)
+                meta = _export_run(
+                    run, job, out_dir, use_export_report_date=True
+                )
             else:
                 if action == "rerun":
                     print(f"  RERUN probes ({action_reason})", flush=True)
@@ -714,7 +719,7 @@ def run_batch(
 
                 cost_usd = float(run.get("total_cost_usd") or 0.0)
                 spent_usd += cost_usd
-                meta = _export_run(run, job, out_dir)
+                meta = _export_run(run, job, out_dir, use_export_report_date=False)
 
             pdf = Path(meta["pdf_path"])
             h = sha256_file(pdf)

@@ -6,7 +6,12 @@ import time
 
 from sqlalchemy.orm import Session
 
-from tygeo.brand_match import mentions_brand, mentions_phrase
+from tygeo.brand_match import (
+    build_matching_aliases,
+    mentions_brand,
+    mentions_phrase,
+    sync_mention_position,
+)
 from tygeo.citations import build_cited_domains, normalize_domain
 from tygeo.config import Settings
 from tygeo.llm import extract_mention_details, run_geo_query_provider, run_recommendations
@@ -137,8 +142,10 @@ def analyze_response(
     brand: str,
     competitors: list[str],
     aliases: list[str] | None = None,
+    display_name: str | None = None,
 ) -> tuple[bool, dict[str, bool]]:
-    brand_hit = mentions_brand(response_text, brand=brand, aliases=aliases)
+    match_aliases = build_matching_aliases(brand, aliases, display_name)
+    brand_hit = mentions_brand(response_text, brand=brand, aliases=match_aliases)
     comp: dict[str, bool] = {}
     for c in competitors:
         comp[c] = mentions_phrase(response_text, c)
@@ -402,11 +409,16 @@ def execute_run(
             total_pt += int(meta.get("prompt_tokens") or 0)
             total_ct += int(meta.get("completion_tokens") or 0)
 
+            snap = run.profile_snapshot if run is not None else None
+            display = (
+                str((snap or {}).get("display_name") or "").strip() if snap else ""
+            ) or None
             brand_hit, comp = analyze_response(
                 text,
                 brand=brand,
                 competitors=pilot.competitors,
                 aliases=pilot.aliases,
+                display_name=display,
             )
             cited = build_cited_domains(
                 text,
@@ -447,6 +459,8 @@ def execute_run(
                 sentiment = "neutral"
                 mention_position = "not_mentioned"
                 relevance_score = 0.0
+
+            mention_position = sync_mention_position(brand_hit, mention_position)
 
             qr = QueryResult(
                 run_id=run.id,
