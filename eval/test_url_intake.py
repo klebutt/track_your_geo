@@ -17,6 +17,7 @@ from tygeo.url_intake import (
     load_accountant_query_banks,
     load_accountant_query_templates,
     normalize_locality_stance,
+    normalize_uk_location,
     normalize_url,
     pilot_snapshot,
     primary_location,
@@ -46,6 +47,13 @@ def test_generate_aliases_strips_ltd():
     aliases = generate_aliases("Riverside Accountants Ltd", ["Riverside Acc"])
     assert "Riverside Acc" in aliases
     assert any("Riverside Accountants" == a for a in aliases)
+
+
+def test_normalize_uk_location_regions():
+    assert normalize_uk_location("Sheffield, England") == "Sheffield, UK"
+    assert normalize_uk_location("Swansea, South Wales") == "Swansea, UK"
+    assert normalize_uk_location("Manchester") == "Manchester, UK"
+    assert normalize_uk_location("Manchester, UK") == "Manchester, UK"
 
 
 def test_primary_location_short_unchanged():

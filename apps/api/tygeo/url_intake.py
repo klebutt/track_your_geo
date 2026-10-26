@@ -297,6 +297,55 @@ _COUNTRY_LIKE = frozenset(
 )
 
 
+_REGION_TO_UK = frozenset(
+    {
+        "england",
+        "scotland",
+        "wales",
+        "northern ireland",
+        "south wales",
+        "north wales",
+        "mid wales",
+        "great britain",
+    }
+)
+
+
+def normalize_uk_location(location: str) -> str:
+    """Normalize inferred locations toward 'Town, UK' without rewriting town names."""
+    raw = (location or "").strip()
+    if not raw:
+        return "UK"
+    low = raw.lower()
+    if low in _COUNTRY_LIKE or low in {"uk", "united kingdom", "the uk"}:
+        return "UK"
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if not parts:
+        return "UK"
+    if len(parts) == 1:
+        town = parts[0]
+        if town.lower() in _COUNTRY_LIKE:
+            return "UK"
+        return f"{town}, UK"
+    last = parts[-1]
+    last_low = last.lower()
+    if last_low in _COUNTRY_LIKE or last_low == "uk":
+        country = "UK"
+        town_parts = parts[:-1]
+    elif last_low in _REGION_TO_UK:
+        country = "UK"
+        town_parts = parts[:-1]
+    else:
+        # e.g. "Southampton, Hampshire" — keep as-is (operator can override in CSV)
+        return raw
+    if not town_parts:
+        return country
+    town = town_parts[0]
+    if town.lower() in _REGION_TO_UK and len(town_parts) > 1:
+        town = town_parts[1]
+    return f"{town}, {country}"
+
+
 def primary_location(location: str) -> tuple[str, str | None]:
     """Return (primary_location, location_raw_or_None).
 
@@ -550,11 +599,42 @@ def profile_dict_to_pilot(
     )
 
 
+def pilot_with_location_override(
+    settings: Settings,
+    pilot: PilotProfile,
+    location: str,
+) -> PilotProfile:
+    """Rebuild probe questions for an operator-supplied location."""
+    loc = (location or "").strip()
+    if not loc:
+        return pilot
+    loc_primary, loc_raw = primary_location(loc)
+    loc_primary = normalize_uk_location(loc_primary)
+    banks = load_accountant_query_banks(settings.pilot_dir_path)
+    queries = build_queries_for_stance(
+        banks,
+        stance=pilot.locality_stance or "unclear",
+        location=loc_primary,
+        services=list(pilot.services),
+    )
+    stored_raw = loc_raw
+    if not stored_raw and loc != loc_primary:
+        stored_raw = loc
+    return pilot.model_copy(
+        update={
+            "location": loc_primary,
+            "location_raw": stored_raw,
+            "queries": queries,
+        }
+    )
+
+
 def infer_pilot_from_url(
     settings: Settings,
     url: str,
     *,
     vertical: str = "accountants",
+    location_override: str | None = None,
 ) -> tuple[PilotProfile, list[dict[str, Any]]]:
     """Fetch/extract/enrich a PilotProfile for URL intake. Returns profile + usage_log entries."""
     vertical = (vertical or "accountants").strip().lower()
@@ -599,6 +679,7 @@ def infer_pilot_from_url(
             extracted["online_remote"] = enriched.get("online_remote")
 
     loc_primary, loc_raw = primary_location(str(extracted.get("location") or ""))
+    loc_primary = normalize_uk_location(loc_primary)
     extracted["location"] = loc_primary
     extracted["locality_stance"] = normalize_locality_stance(extracted.get("locality_stance"))
     extracted["online_remote"] = normalize_online_remote(extracted.get("online_remote"))
@@ -626,6 +707,15 @@ def infer_pilot_from_url(
         queries=queries,
         location_raw=loc_raw,
     )
+    if location_override and location_override.strip():
+        pilot = pilot_with_location_override(settings, pilot, location_override)
+        usage.append(
+            {
+                "phase": "location_override",
+                "location": pilot.location,
+                "cost_usd": 0.0,
+            }
+        )
     return pilot, usage
 
 

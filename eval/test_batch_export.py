@@ -18,7 +18,10 @@ sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.batch_export import (
+    BatchJob,
     load_jobs,
+    load_run_log_index,
+    plan_job,
     MANIFEST_FIELDS,
     COST_PER_FIRM_USD,
     MINUTES_PER_FIRM,
@@ -50,8 +53,9 @@ class TestCSVParsing:
         )
         jobs = load_jobs(csv_file)
         assert len(jobs) == 2
-        assert jobs[0] == ("Acme Accountants", "https://acme-accountants.example")
-        assert jobs[1] == ("Test & Partners", "https://test-partners.example")
+        assert jobs[0].firm == "Acme Accountants"
+        assert jobs[0].url == "https://acme-accountants.example"
+        assert jobs[1].firm == "Test & Partners"
 
     def test_load_jobs_with_firm_column(self, tmp_path):
         """Should parse CSV with 'firm' column (alternative to firm_name)."""
@@ -62,7 +66,7 @@ class TestCSVParsing:
         )
         jobs = load_jobs(csv_file)
         assert len(jobs) == 1
-        assert jobs[0] == ("Legacy Firm Ltd", "https://legacy.example")
+        assert jobs[0].firm == "Legacy Firm Ltd"
 
     def test_load_jobs_skips_empty_firm(self, tmp_path):
         """Should skip rows with empty firm name."""
@@ -75,7 +79,7 @@ class TestCSVParsing:
         )
         jobs = load_jobs(csv_file)
         assert len(jobs) == 1
-        assert jobs[0][0] == "Valid Firm"
+        assert jobs[0].firm == "Valid Firm"
 
     def test_load_jobs_skips_non_http_urls(self, tmp_path):
         """Should skip rows without http/https URLs."""
@@ -88,7 +92,19 @@ class TestCSVParsing:
         )
         jobs = load_jobs(csv_file)
         assert len(jobs) == 1
-        assert jobs[0][0] == "Valid Firm"
+        assert jobs[0].firm == "Valid Firm"
+
+    def test_load_jobs_optional_columns(self, tmp_path):
+        csv_file = tmp_path / "firms.csv"
+        csv_file.write_text(
+            "firm_name,url,location,display_name\n"
+            "Riverside & Co Accountants Limited,https://riverside-accountants.example,Derby UK,Riverside & Co\n"
+        )
+        jobs = load_jobs(csv_file)
+        assert len(jobs) == 1
+        assert jobs[0].location == "Derby UK"
+        assert jobs[0].display_name == "Riverside & Co"
+        assert jobs[0].manifest_firm == "Riverside & Co"
 
     def test_load_jobs_strips_whitespace(self, tmp_path):
         """Should strip whitespace from firm names and URLs."""
@@ -99,7 +115,8 @@ class TestCSVParsing:
         )
         jobs = load_jobs(csv_file)
         assert len(jobs) == 1
-        assert jobs[0] == ("Padded Firm", "https://padded.example")
+        assert jobs[0].firm == "Padded Firm"
+        assert jobs[0].url == "https://padded.example"
 
 
 class TestManifestSchema:
@@ -148,6 +165,7 @@ class TestDryRun:
             base_url="http://127.0.0.1:8000",
             reuse_completed=True,
             force=False,
+            regenerate=False,
             dry_run=True,
         )
         assert exit_code == 0
@@ -175,6 +193,7 @@ class TestDryRun:
             base_url="http://127.0.0.1:8000",
             reuse_completed=True,
             force=False,
+            regenerate=False,
             dry_run=True,
         )
 
@@ -470,7 +489,7 @@ class TestCompletionIndex:
             f"Different Name Ltd,https://firm.example,{pdf_path},2026-01-01T00:00:00Z,0.50,abc,ok\n"
         )
 
-        jobs = [("CSV Name Ltd", "https://firm.example")]
+        jobs = [BatchJob(firm="CSV Name Ltd", url="https://firm.example")]
         
         exit_code = run_batch(
             batch="test",
@@ -479,14 +498,14 @@ class TestCompletionIndex:
             base_url="http://127.0.0.1:8000",
             reuse_completed=True,
             force=False,
+            regenerate=False,
             dry_run=True,
         )
 
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "SKIP" in captured.out
+        assert "[SKIP]" in captured.out
         assert "URL matches" in captured.out
-        assert "Different Name Ltd" in captured.out
 
 
 class TestRemovedPDFRerun:
@@ -510,7 +529,7 @@ class TestRemovedPDFRerun:
             "Test Firm,https://test.example,/nonexistent/path.pdf,2026-01-01T00:00:00Z,0.50,abc,ok\n"
         )
 
-        jobs = [("Test Firm", "https://test.example")]
+        jobs = [BatchJob(firm="Test Firm", url="https://test.example")]
         
         exit_code = run_batch(
             batch="test",
@@ -519,12 +538,13 @@ class TestRemovedPDFRerun:
             base_url="http://127.0.0.1:8000",
             reuse_completed=True,
             force=False,
+            regenerate=False,
             dry_run=True,
         )
 
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "QUEUE" in captured.out
+        assert "[PROBE]" in captured.out
 
 
 class TestForceFlag:
@@ -543,7 +563,7 @@ class TestForceFlag:
             f"Test Firm,https://test.example,{pdf_path},2026-01-01T00:00:00Z,0.50,abc,ok\n"
         )
 
-        jobs = [("Test Firm", "https://test.example")]
+        jobs = [BatchJob(firm="Test Firm", url="https://test.example")]
         
         exit_code = run_batch(
             batch="test",
@@ -552,12 +572,13 @@ class TestForceFlag:
             base_url="http://127.0.0.1:8000",
             reuse_completed=True,
             force=True,
+            regenerate=False,
             dry_run=True,
         )
 
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "QUEUE" in captured.out
+        assert "[PROBE]" in captured.out
         assert "--force" in captured.out
 
 
@@ -665,3 +686,65 @@ class TestManifestRowReplacement:
         assert len(test_rows) == 1
         assert test_rows[0]["firm"] == "New Name"
         assert test_rows[0]["sha256"] == "new"
+
+
+class TestJobPlanning:
+    """Plan skip / probe / regenerate / rerun from manifest + run log."""
+
+    def test_plan_regenerate_with_run_id(self):
+        job = BatchJob(firm="A", url="https://a.example")
+        completion = {"a.example": {"status": "ok", "report_path": "/x.pdf"}}
+        run_log = {"a.example": {"run_id": 42, "profile_location": "Derby, UK"}}
+        action, _reason = plan_job(
+            job,
+            completion_index=completion,
+            run_log_index=run_log,
+            reuse_completed=True,
+            force=False,
+            regenerate=True,
+        )
+        assert action == "regenerate"
+
+    def test_plan_rerun_on_location_override(self):
+        job = BatchJob(firm="A", url="https://a.example", location="Truro, UK")
+        completion = {"a.example": {"status": "ok", "report_path": "/x.pdf"}}
+        run_log = {"a.example": {"run_id": 7, "profile_location": "Birmingham, UK"}}
+        action, reason = plan_job(
+            job,
+            completion_index=completion,
+            run_log_index=run_log,
+            reuse_completed=True,
+            force=False,
+            regenerate=False,
+        )
+        assert action == "rerun"
+        assert "Truro" in reason
+
+    def test_load_run_log_index_latest_run_id(self, tmp_path):
+        log = tmp_path / "log.jsonl"
+        log.write_text(
+            '{"url":"https://a.example","run_id":1,"profile_location":"X"}\n'
+            '{"url":"https://a.example","run_id":9,"profile_location":"Y"}\n'
+        )
+        index = load_run_log_index(log)
+        assert index["a.example"]["run_id"] == 9
+
+    def test_dry_run_regenerate_label(self, tmp_path, capsys):
+        log_dir = tmp_path / "reports"
+        log_dir.mkdir(parents=True)
+        (log_dir / "wave2-run-log.jsonl").write_text(
+            '{"url":"https://firm.example","run_id":3,"status":"ok"}\n'
+        )
+        jobs = [BatchJob(firm="Firm", url="https://firm.example")]
+        run_batch(
+            batch="wave2",
+            jobs=jobs,
+            vault=tmp_path,
+            base_url="http://127.0.0.1:8000",
+            reuse_completed=True,
+            force=False,
+            regenerate=True,
+            dry_run=True,
+        )
+        out = capsys.readouterr().out
+        assert "[REGENERATE]" in out

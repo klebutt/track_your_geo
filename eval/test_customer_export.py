@@ -7,6 +7,7 @@ from tygeo.customer_export import (
     build_customer_markdown,
     export_customer_report,
     pdf_filename_for_firm,
+    prose_brand,
 )
 from tygeo.plain_report import EM_DASH
 
@@ -52,6 +53,14 @@ def _sample_run(**overrides):
     return run
 
 
+def test_prose_brand_avoids_double_full_stop():
+    assert prose_brand("Sample Taylor & Co.") == "Sample Taylor & Co"
+    run = _sample_run(brand_name="Sample Taylor & Co.")
+    md = build_customer_markdown(run)
+    assert "Co.." not in md
+    assert "**Sample Taylor & Co**." in md or "named **Sample Taylor & Co**." in md
+
+
 def test_pdf_filename():
     assert pdf_filename_for_firm("Hewitt Accountancy") == "Hewitt-Accountancy-AI-recommend.pdf"
     assert " " not in pdf_filename_for_firm("Hewitt Accountancy")
@@ -81,7 +90,7 @@ def test_customer_markdown_locks(tmp_path: Path):
     assert "gpt-5-search-api" not in md
     assert "perplexity/sonar-pro" not in md
     assert "gemini/gemini-2.5-flash" not in md
-    assert "OpenAI search" in md
+    assert "ChatGPT search" in md
     assert "Perplexity" in md
     assert "Gemini" in md
     assert EM_DASH not in md

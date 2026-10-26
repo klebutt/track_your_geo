@@ -34,6 +34,8 @@ class RunCreate(BaseModel):
 class RunFromUrlCreate(BaseModel):
     url: str
     vertical: str = "accountants"
+    location: str | None = None
+    display_name: str | None = None
 
 
 class QueryResultOut(BaseModel):

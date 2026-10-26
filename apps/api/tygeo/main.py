@@ -139,7 +139,14 @@ def api_create_run_from_url(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    background_tasks.add_task(finish_url_run_probes, run.id, url, vertical=vertical)
+    background_tasks.add_task(
+        finish_url_run_probes,
+        run.id,
+        url,
+        vertical=vertical,
+        location_override=body.location,
+        display_name=body.display_name,
+    )
     return _load_run(db, run.id)
 
 

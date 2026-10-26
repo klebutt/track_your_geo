@@ -41,12 +41,49 @@ def pdf_filename_for_firm(firm: str) -> str:
     return f"{safe_firm_filename(firm)}-AI-recommend.pdf"
 
 
+def export_brand_name(run: dict[str, Any]) -> str:
+    """Customer-facing firm label (display_name when set, else stored brand_name)."""
+    snap = run.get("profile_snapshot") or {}
+    display = str(snap.get("display_name") or "").strip()
+    if display:
+        return display
+    return str(run.get("brand_name") or "Firm").strip() or "Firm"
+
+
+def prose_brand(brand: str) -> str:
+    """Avoid double full stops when the trading name already ends with '.'"""
+    b = (brand or "").strip()
+    while b.endswith(".") and not b.endswith(".."):
+        b = b[:-1].rstrip()
+    return b or "Your firm"
+
+
+def prepare_run_for_customer_export(
+    run: dict[str, Any],
+    *,
+    display_name: str | None = None,
+    location: str | None = None,
+) -> dict[str, Any]:
+    """Shallow copy with export-only overrides (does not change stored probe matching)."""
+    out = dict(run)
+    snap = dict(out.get("profile_snapshot") or {})
+    if display_name and display_name.strip():
+        snap["display_name"] = display_name.strip()
+    if location and location.strip():
+        loc = location.strip()
+        snap["location"] = loc
+        out["location"] = loc
+    out["profile_snapshot"] = snap
+    return out
+
+
 def _plain_from_run(run: dict[str, Any]):
     """Always rebuild so export picks up latest Sales-locked copy."""
     snap = run.get("profile_snapshot") or {}
+    brand = export_brand_name(run)
     pr = build_plain_report(
         status=str(run.get("status") or ""),
-        brand_name=str(run.get("brand_name") or ""),
+        brand_name=brand,
         model_name=str(run.get("model_name") or ""),
         query_results=list(run.get("query_results") or []),
         locality_stance=str(snap.get("locality_stance") or "") or None,
@@ -88,7 +125,8 @@ def build_customer_markdown(run: dict[str, Any]) -> str:
     if not pr.ready:
         raise ValueError("plain_report not ready for export")
 
-    brand = str(run.get("brand_name") or "Your firm").strip()
+    brand = export_brand_name(run)
+    prose = prose_brand(brand)
     snap = run.get("profile_snapshot") or {}
     loc = str(snap.get("location") or run.get("location") or "").strip()
     url = str(run.get("source_url") or snap.get("source_url") or "").strip()
@@ -108,7 +146,7 @@ def build_customer_markdown(run: dict[str, Any]) -> str:
     lines.append("")
     lines.append(
         f"That is **{pr.searches_recommended} of {pr.searches_total}** "
-        f"customer-intent questions where at least one AI reply named **{brand}**."
+        f"customer-intent questions where at least one AI reply named **{prose}**."
     )
     lines.append("")
 
@@ -293,7 +331,9 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
     if not pr.ready:
         raise ValueError("plain_report not ready for PDF export")
 
-    brand = str(run.get("brand_name") or firm).strip() or firm
+    brand = export_brand_name(run) if run.get("profile_snapshot") or run.get("brand_name") else firm
+    brand = brand.strip() or firm
+    prose = prose_brand(brand)
     snap = run.get("profile_snapshot") or {}
     loc = str(snap.get("location") or run.get("location") or "").strip()
     url = str(run.get("source_url") or snap.get("source_url") or "").strip()
@@ -474,7 +514,7 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
     pdf.cell(0, 14, scrub(f"{x} of {n}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
     write_md(
-        f"customer-intent questions where at least one AI reply named **{brand}**.",
+        f"customer-intent questions where at least one AI reply named **{prose}**.",
         size=11,
         gap=0,
         lh=5.5,
@@ -530,17 +570,44 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
         write_md(pr.models_note, size=9, gap=0, color=(100, 116, 139), lh=5)
 
     section_break(6)
-    heading("Snapshot (what we measured)")
+    # Keep Snapshot heading, location line, URL, and table on the same page when possible.
+    loc_block = ""
     if loc:
-        write_md(f"Location: {loc}", size=9, gap=0.5, color=(71, 85, 105), lh=4.5)
-    if url:
-        write_md(url, size=9, gap=2, color=(71, 85, 105), lh=4.5)
-
+        loc_block = f"Location: {loc}"
+    url_block = url or ""
     snapshot_rows = [
         ("Mentioned in AI replies", f"{vis * 100:.0f}% of replies"),
         ("Composite", f"{composite:.1f} / 100"),
         ("Models", ", ".join(model_labels) if model_labels else "n/a"),
     ]
+    pdf.set_font("Helvetica", size=9)
+    est_heading = 8.0
+    est_loc = 0.0
+    if loc_block:
+        est_loc += pdf.multi_cell(
+            page_w, 4.5, scrub(loc_block), dry_run=True, output="HEIGHT"
+        ) + 1.0
+    est_url = 0.0
+    if url_block:
+        est_url += pdf.multi_cell(
+            page_w, 4.5, scrub(url_block), dry_run=True, output="HEIGHT"
+        ) + 2.0
+    est_table = row_h * len(snapshot_rows) + 3.0
+    est_index = 0.0
+    if pr.index_note:
+        est_index = pdf.multi_cell(
+            page_w, 5, scrub(pr.index_note), dry_run=True, output="HEIGHT"
+        ) + 3.0
+    need = est_heading + est_loc + est_url + est_table + est_index
+    if pdf.get_y() + need > pdf.page_break_trigger:
+        pdf.add_page()
+
+    heading("Snapshot (what we measured)", gap=1)
+    if loc_block:
+        write_md(loc_block, size=9, gap=0.5, color=(71, 85, 105), lh=4.5)
+    if url_block:
+        write_md(url_block, size=9, gap=2, color=(71, 85, 105), lh=4.5)
+
     pdf.set_draw_color(*border)
     pdf.set_line_width(0.3)
     pdf.set_fill_color(*bg_alt)
@@ -583,7 +650,7 @@ def export_customer_report(
     also_markdown: bool = True,
 ) -> dict[str, Any]:
     """Write PDF (+ optional .md) into out_dir. Returns paths and meta."""
-    brand = str(run.get("brand_name") or "Firm").strip() or "Firm"
+    brand = export_brand_name(run)
     md = build_customer_markdown(run)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

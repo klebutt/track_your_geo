@@ -156,7 +156,14 @@ def test_post_run_from_url_infers_then_probes(tmp_path, monkeypatch):
         industry="accountants",
     )
 
-    def fake_finish(run_id, url, *, vertical):
+    def fake_finish(
+        run_id,
+        url,
+        *,
+        vertical,
+        location_override=None,
+        display_name=None,
+    ):
         settings = Settings()
         engine = create_engine(f"sqlite:///{db_path}")
         Session = sessionmaker(bind=engine)

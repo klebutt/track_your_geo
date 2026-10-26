@@ -37,8 +37,10 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 
 REPO = Path(__file__).resolve().parents[1]
@@ -46,7 +48,11 @@ API_ROOT = REPO / "apps" / "api"
 if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
-from tygeo.customer_export import export_customer_report, pdf_filename_for_firm  # noqa: E402
+from tygeo.customer_export import (  # noqa: E402
+    export_customer_report,
+    pdf_filename_for_firm,
+    prepare_run_for_customer_export,
+)
 
 DEFAULT_VAULT = Path(r"G:\My Drive\Obsidian\projects\track-your-geo")
 USD_TO_GBP = 0.79
@@ -81,6 +87,26 @@ ERROR_FIELDS = [
     "run_id",
     "generated_at",
 ]
+
+JobAction = Literal["skip", "probe", "regenerate", "rerun"]
+
+
+@dataclass(frozen=True)
+class BatchJob:
+    """One input CSV row."""
+
+    firm: str
+    url: str
+    location: str | None = None
+    display_name: str | None = None
+
+    @property
+    def manifest_firm(self) -> str:
+        return (self.display_name or self.firm).strip()
+
+
+def _norm_loc(value: str | None) -> str:
+    return (value or "").strip().casefold()
 
 
 def normalize_url(url: str) -> str:
@@ -267,16 +293,147 @@ def append_csv(path: Path, row: dict, fieldnames: list[str]) -> None:
         w.writerow(row)
 
 
-def load_jobs(path: Path) -> list[tuple[str, str]]:
-    """Load firm_name,url pairs from CSV."""
-    jobs: list[tuple[str, str]] = []
+def load_jobs(path: Path) -> list[BatchJob]:
+    """Load batch jobs from CSV (firm_name,url plus optional location, display_name)."""
+    jobs: list[BatchJob] = []
     with path.open(encoding="utf-8") as f:
         for row in csv.DictReader(f):
             firm = (row.get("firm_name") or row.get("firm") or "").strip()
             url = (row.get("url") or "").strip()
+            location = (row.get("location") or "").strip() or None
+            display_name = (row.get("display_name") or "").strip() or None
             if firm and url.startswith("http"):
-                jobs.append((firm, url))
+                jobs.append(
+                    BatchJob(
+                        firm=firm,
+                        url=url,
+                        location=location,
+                        display_name=display_name,
+                    )
+                )
     return jobs
+
+
+def load_run_log_index(path: Path) -> dict[str, dict]:
+    """Map normalized URL -> latest jsonl record with a probe run_id."""
+    index: dict[str, dict] = {}
+    if not path.exists():
+        return index
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            url_key = normalize_url(str(rec.get("url") or ""))
+            if not url_key:
+                continue
+            run_id = rec.get("run_id")
+            if run_id in (None, ""):
+                continue
+            try:
+                rid = int(run_id)
+            except (TypeError, ValueError):
+                continue
+            loc = str(
+                rec.get("profile_location")
+                or rec.get("location")
+                or ""
+            ).strip()
+            index[url_key] = {
+                "run_id": rid,
+                "profile_location": loc,
+                "firm": rec.get("firm"),
+            }
+    return index
+
+
+def plan_job(
+    job: BatchJob,
+    *,
+    completion_index: dict[str, dict],
+    run_log_index: dict[str, dict],
+    reuse_completed: bool,
+    force: bool,
+    regenerate: bool,
+) -> tuple[JobAction, str]:
+    """Return (action, human reason) for dry-run and live batch."""
+    url_key = normalize_url(job.url)
+    existing = completion_index.get(url_key)
+    logged = run_log_index.get(url_key)
+
+    if regenerate:
+        if logged and logged.get("run_id"):
+            return "regenerate", "re-render PDF from stored run (no new probes)"
+        if existing and reuse_completed and not force:
+            return (
+                "probe",
+                "no run_id in run log — need a probe before regenerate",
+            )
+        return "probe", "no completed run in log for regenerate"
+
+    if force:
+        return "probe", "--force"
+
+    if existing and reuse_completed:
+        prior_loc = _norm_loc((logged or {}).get("profile_location"))
+        if job.location and prior_loc and _norm_loc(job.location) != prior_loc:
+            return "rerun", f"location override ({job.location}) differs from prior ({logged.get('profile_location')})"
+        if job.location and not prior_loc:
+            return "rerun", f"location override ({job.location}) — prior run had no stored location"
+        return "skip", "URL matches existing ok report"
+
+    if job.location and logged and _norm_loc(job.location) != _norm_loc(
+        logged.get("profile_location")
+    ):
+        return "rerun", f"location override ({job.location})"
+
+    return "probe", "new or incomplete"
+
+
+def _from_url_body(job: BatchJob) -> dict:
+    body: dict = {"url": job.url, "vertical": "accountants"}
+    if job.location:
+        body["location"] = job.location
+    if job.display_name:
+        body["display_name"] = job.display_name
+    return body
+
+
+def _export_run(
+    run: dict,
+    job: BatchJob,
+    out_dir: Path,
+) -> dict:
+    """Apply export overrides and write customer PDF (+ md)."""
+    run = prepare_run_for_customer_export(
+        run,
+        display_name=job.display_name,
+        location=job.location,
+    )
+    return export_customer_report(run, out_dir)
+
+
+def _manifest_row(
+    job: BatchJob,
+    url: str,
+    pdf: Path,
+    *,
+    cost_usd: float,
+    h: str,
+) -> dict:
+    return {
+        "firm": job.manifest_firm,
+        "url": url,
+        "report_path": str(pdf),
+        "generated_at": _now(),
+        "run_cost_gbp": round(cost_usd * USD_TO_GBP, 4),
+        "sha256": h,
+        "status": "ok",
+    }
 
 
 def preflight_check(base_url: str) -> dict | None:
@@ -293,11 +450,12 @@ def preflight_check(base_url: str) -> dict | None:
 def run_batch(
     *,
     batch: str,
-    jobs: list[tuple[str, str]],
+    jobs: list[BatchJob],
     vault: Path,
     base_url: str,
     reuse_completed: bool,
     force: bool,
+    regenerate: bool,
     dry_run: bool,
 ) -> int:
     """Run the batch export. Returns exit code."""
@@ -309,46 +467,53 @@ def run_batch(
 
     manifest = load_manifest(manifest_path)
     completion_index = build_completion_index(manifest) if reuse_completed else {}
+    run_log_index = load_run_log_index(jsonl_path)
 
     if dry_run:
-        print(f"DRY RUN: would process {len(jobs)} firms", flush=True)
+        mode = "REGENERATE" if regenerate else "PROBE"
+        print(f"DRY RUN ({mode}): would process {len(jobs)} firms", flush=True)
         print(f"  Output dir: {out_dir}", flush=True)
         print(f"  Manifest: {manifest_path}", flush=True)
-        print(f"  Estimated cost: ${len(jobs) * COST_PER_FIRM_USD:.2f} USD", flush=True)
-        print(f"  Estimated time: ~{len(jobs) * MINUTES_PER_FIRM:.0f} minutes", flush=True)
-        print("\nFirms to process:", flush=True)
-        queue_count = 0
-        skip_count = 0
-        for firm, url in jobs:
-            url_key = normalize_url(url)
-            existing = completion_index.get(url_key)
-            if existing and reuse_completed and not force:
-                existing_firm = existing.get("firm", "?")
-                existing_path = existing.get("report_path", "?")
-                print(
-                    f"  [SKIP] {firm} ({url}) — URL matches existing report for "
-                    f"'{existing_firm}' at {existing_path}",
-                    flush=True,
-                )
-                skip_count += 1
-            else:
-                reason = ""
-                if force:
-                    reason = " (--force)"
-                elif not reuse_completed:
-                    reason = " (--no-reuse-completed)"
-                print(f"  [QUEUE] {firm} ({url}){reason}", flush=True)
-                queue_count += 1
-        print(f"\nSummary: {queue_count} to run, {skip_count} to skip", flush=True)
-        if queue_count > 0:
+        print(f"  Run log: {jsonl_path}", flush=True)
+        print("\nFirms:", flush=True)
+        counts = {"skip": 0, "probe": 0, "regenerate": 0, "rerun": 0}
+        for job in jobs:
+            action, reason = plan_job(
+                job,
+                completion_index=completion_index,
+                run_log_index=run_log_index,
+                reuse_completed=reuse_completed,
+                force=force,
+                regenerate=regenerate,
+            )
+            counts[action] += 1
+            label = {
+                "skip": "SKIP",
+                "probe": "PROBE",
+                "regenerate": "REGENERATE",
+                "rerun": "RERUN",
+            }[action]
+            extra = f" — {reason}" if reason else ""
+            name = job.manifest_firm
+            loc = f" · loc={job.location}" if job.location else ""
+            print(f"  [{label}] {name} ({job.url}){loc}{extra}", flush=True)
+        probe_like = counts["probe"] + counts["rerun"]
+        print(
+            f"\nSummary: {counts['regenerate']} regenerate · {counts['rerun']} rerun · "
+            f"{counts['probe']} new probe · {counts['skip']} skip",
+            flush=True,
+        )
+        if probe_like > 0:
             print(
-                f"Estimated cost for queued: ~${queue_count * COST_PER_FIRM_USD:.2f} USD",
+                f"Estimated probe cost: ~${probe_like * COST_PER_FIRM_USD:.2f} USD",
                 flush=True,
             )
             print(
-                f"Estimated time for queued: ~{queue_count * MINUTES_PER_FIRM:.0f} minutes",
+                f"Estimated probe time: ~{probe_like * MINUTES_PER_FIRM:.0f} minutes",
                 flush=True,
             )
+        if counts["regenerate"]:
+            print("Regenerate rows re-use stored runs (no probe cost).", flush=True)
         return 0
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -375,7 +540,9 @@ def run_batch(
         note=f"Batch {batch} started.",
     )
 
-    for idx, (firm, url) in enumerate(jobs, 1):
+    for idx, job in enumerate(jobs, 1):
+        firm = job.manifest_firm
+        url = job.url
         print(f"[{idx}/{total}] START {firm} · {url}", flush=True)
 
         write_progress(
@@ -392,8 +559,17 @@ def run_batch(
         )
 
         url_key = normalize_url(url)
-        existing = completion_index.get(url_key)
-        if existing and reuse_completed and not force:
+        action, action_reason = plan_job(
+            job,
+            completion_index=completion_index,
+            run_log_index=run_log_index,
+            reuse_completed=reuse_completed,
+            force=force,
+            regenerate=regenerate,
+        )
+
+        if action == "skip":
+            existing = completion_index[url_key]
             existing_firm = existing.get("firm", firm)
             existing_path = existing.get("report_path", "")
             h = existing.get("sha256", "")
@@ -430,57 +606,82 @@ def run_batch(
         }
 
         try:
-            pending = http_json(
-                "POST",
-                f"{base_url.rstrip('/')}/api/runs/from-url",
-                {"url": url, "vertical": "accountants"},
-                timeout=180,
-            )
-            run_id = int(pending["id"])
-            err_row["run_id"] = run_id
-            print(f"  started run #{run_id}", flush=True)
+            if action == "regenerate":
+                logged = run_log_index[url_key]
+                run_id = int(logged["run_id"])
+                print(f"  REGENERATE from run #{run_id} ({action_reason})", flush=True)
+                run = http_json(
+                    "GET",
+                    f"{base_url.rstrip('/')}/api/runs/{run_id}",
+                    timeout=180,
+                )
+                if run.get("status") != "completed":
+                    raise RuntimeError(f"stored run #{run_id} status={run.get('status')}")
+                prior = completion_index.get(url_key) or {}
+                cost_usd = float(prior.get("run_cost_gbp") or 0.0) / USD_TO_GBP
+                meta = _export_run(run, job, out_dir)
+            else:
+                if action == "rerun":
+                    print(f"  RERUN probes ({action_reason})", flush=True)
+                pending = http_json(
+                    "POST",
+                    f"{base_url.rstrip('/')}/api/runs/from-url",
+                    _from_url_body(job),
+                    timeout=180,
+                )
+                run_id = int(pending["id"])
+                err_row["run_id"] = run_id
+                print(f"  started run #{run_id}", flush=True)
 
-            run = wait_run(base_url.rstrip("/"), run_id)
-            if run.get("status") != "completed":
-                reason = f"run_status={run.get('status')}"
-                err_row["exclusion_reason"] = reason
-                if is_auth_failure(json.dumps(run) + reason):
+                run = wait_run(base_url.rstrip("/"), run_id)
+                if run.get("status") != "completed":
+                    reason = f"run_status={run.get('status')}"
+                    err_row["exclusion_reason"] = reason
+                    if is_auth_failure(json.dumps(run) + reason):
+                        append_csv(errors_path, err_row, ERROR_FIELDS)
+                        print(f"FATAL auth: {reason}", flush=True)
+                        return 3
                     append_csv(errors_path, err_row, ERROR_FIELDS)
-                    print(f"FATAL auth: {reason}", flush=True)
-                    return 3
-                append_csv(errors_path, err_row, ERROR_FIELDS)
-                with jsonl_path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps({**err_row, "status": "failed"}, ensure_ascii=False) + "\n")
-                failed += 1
-                print(f"  FAIL {firm}: {reason}", flush=True)
-                continue
+                    with jsonl_path.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps({**err_row, "status": "failed"}, ensure_ascii=False) + "\n"
+                        )
+                    failed += 1
+                    print(f"  FAIL {firm}: {reason}", flush=True)
+                    continue
 
-            cost_usd = float(run.get("total_cost_usd") or 0.0)
-            spent_usd += cost_usd
+                cost_usd = float(run.get("total_cost_usd") or 0.0)
+                spent_usd += cost_usd
+                meta = _export_run(run, job, out_dir)
 
-            meta = export_customer_report(run, out_dir)
             pdf = Path(meta["pdf_path"])
             h = sha256_file(pdf)
-            row = {
-                "firm": meta.get("firm") or firm,
-                "url": url,
-                "report_path": str(pdf),
-                "generated_at": _now(),
-                "run_cost_gbp": round(cost_usd * USD_TO_GBP, 4),
-                "sha256": h,
-                "status": "ok",
-            }
+            row = _manifest_row(job, url, pdf, cost_usd=cost_usd, h=h)
             manifest = update_manifest_row(manifest, row)
             write_manifest(manifest_path, manifest)
             completion_index[url_key] = row
+            snap = run.get("profile_snapshot") or {}
+            profile_loc = str(snap.get("location") or run.get("location") or "").strip()
+            log_status = "regenerated" if action == "regenerate" else "ok"
             with jsonl_path.open("a", encoding="utf-8") as f:
                 f.write(
                     json.dumps(
-                        {**row, "run_id": run_id, "run_cost_usd": round(cost_usd, 4)},
+                        {
+                            **row,
+                            "run_id": int(run.get("id") or run_id),
+                            "run_cost_usd": round(cost_usd, 4),
+                            "profile_location": profile_loc,
+                            "status": log_status,
+                        },
                         ensure_ascii=False,
                     )
                     + "\n"
                 )
+            run_log_index[url_key] = {
+                "run_id": int(run.get("id") or run_id),
+                "profile_location": profile_loc,
+                "firm": row["firm"],
+            }
             done_ok += 1
             elapsed = time.time() - started
             avg = elapsed / max(done_ok - skipped, 1)
@@ -618,9 +819,18 @@ Completion detection (--reuse-completed, on by default):
   - Re-running a firm replaces (not duplicates) its manifest row
 
 Input CSV format:
-  firm_name,url
+  firm_name,url[,location][,display_name]
   "Example Accountants Ltd","https://example-accountants.co.uk"
-  "Test & Partners","https://testandpartners.example"
+  "Riverside & Co Accountants Limited","https://riverside-accountants.example","Derby, UK","Riverside & Co"
+
+  location — used in probe questions instead of inferred town (also triggers rerun when changed)
+  display_name — trading name on the PDF only; brand matching still uses the inferred legal/trading names from the site
+
+Regenerate (--regenerate):
+  Re-render PDFs from the latest run_id per URL in reports/<batch>-run-log.jsonl (no new probes).
+  Use after template or display_name fixes. The local API must still be running to load stored runs.
+
+Dry run labels: REGENERATE, RERUN (location override), PROBE, SKIP.
 """,
     )
     ap.add_argument(
@@ -683,6 +893,11 @@ Input CSV format:
         action="store_true",
         help="Print what would be done without running probes",
     )
+    ap.add_argument(
+        "--regenerate",
+        action="store_true",
+        help="Re-render PDFs from stored runs (no new probes); updates manifest sha256",
+    )
     args = ap.parse_args()
 
     if args.dedupe_manifest:
@@ -718,12 +933,20 @@ Input CSV format:
     print(f"Estimated time: ~{len(batch_jobs) * MINUTES_PER_FIRM:.0f} minutes", flush=True)
     print("", flush=True)
 
-    if not args.dry_run:
+    if not args.dry_run and not args.regenerate:
         health = preflight_check(args.base_url)
         if health is None:
             print("", flush=True)
             print("To start the local API:", flush=True)
             print("  .\\tygeo-venv\\Scripts\\uvicorn.exe tygeo.main:app --host 127.0.0.1 --port 8000", flush=True)
+            return 2
+        print(f"API health: {health}", flush=True)
+        print("", flush=True)
+    elif not args.dry_run and args.regenerate:
+        health = preflight_check(args.base_url)
+        if health is None:
+            print("", flush=True)
+            print("Regenerate needs the local API to load stored runs.", flush=True)
             return 2
         print(f"API health: {health}", flush=True)
         print("", flush=True)
@@ -735,6 +958,7 @@ Input CSV format:
         base_url=args.base_url,
         reuse_completed=reuse_completed,
         force=args.force,
+        regenerate=args.regenerate,
         dry_run=args.dry_run,
     )
 
