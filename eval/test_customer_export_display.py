@@ -65,8 +65,6 @@ def test_format_query_display_keeps_intra_word_hyphens():
 
 
 def test_loss_entry_query_uses_dash_normalisation():
-    from tygeo.plain_report import LossEntry
-
     run = prepare_run_for_customer_export(
         {
             "status": "completed",
