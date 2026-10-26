@@ -5,6 +5,7 @@ Uses fictional fixtures only - no real firm data.
 
 import csv
 import hashlib
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -23,9 +24,30 @@ from build import (
     markdown_to_html,
     sha256_file,
     build_report_page,
+    _markdown_to_html_fallback,
     TEMPLATES_DIR,
     PUBLIC_DIR,
 )
+
+
+def extract_report_main_html(html: str) -> str:
+    """Report markdown body only (excludes CTA/footer inside report-content)."""
+    start = html.find('<div class="report-content">')
+    assert start != -1, "report-content container missing"
+    start = html.find(">", start) + 1
+    end = html.find('<div class="report-actions">', start)
+    assert end != -1, "report-actions container missing"
+    return html[start:end]
+
+
+def assert_no_raw_markdown_emphasis(fragment: str) -> None:
+    """Generated HTML must not leak markdown ** or * emphasis markers."""
+    assert "**" not in fragment, "literal ** markdown in HTML"
+    # Unescaped emphasis asterisks (not part of HTML attributes or entities)
+    assert not re.search(
+        r"(?<![\w/=])\*(?!\*)(?=[A-Za-z0-9\"“])",
+        fragment,
+    ), "stray markdown * emphasis in HTML"
 
 
 class TestSlugGeneration:
@@ -89,6 +111,29 @@ class TestMarkdownToHtml:
         md = "This is a paragraph.\n\nThis is another."
         html = markdown_to_html(md)
         assert "<p>" in html
+
+    def test_bold_and_italic_inline(self):
+        """**bold** and *italic* should render without leaking markers."""
+        md = (
+            "**AI assistants recommended Fictional & Co in 1 of 10 searches**\n\n"
+            "That is **1 of 10** questions.\n\n"
+            "*Mostly local searches near Test Town.*"
+        )
+        html = markdown_to_html(md)
+        assert "<strong>" in html
+        assert "<em>" in html
+        assert "**" not in html
+        assert "&amp;" in html or "Fictional &amp; Co" in html
+        assert_no_raw_markdown_emphasis(html)
+
+    def test_fallback_renders_inline_emphasis(self):
+        """Fallback renderer must match library behaviour for emphasis."""
+        md = "**Headline** with *note* and **Fictional & Sons**"
+        html = _markdown_to_html_fallback(md)
+        assert "<strong>Headline</strong>" in html
+        assert "<em>note</em>" in html
+        assert "Fictional &amp; Sons" in html
+        assert_no_raw_markdown_emphasis(html)
 
     def test_escape_html(self):
         """HTML special characters should be escaped."""
@@ -270,6 +315,28 @@ This is the gap summary for the fictional firm.
         )
 
         assert meta["pdf_sha256"] == expected_hash
+
+    def test_report_html_renders_markdown_emphasis(self, tmp_path, fake_report_files):
+        """Per-firm pages must not show raw ** or * from customer markdown."""
+        md_path, pdf_path = fake_report_files
+        dist = tmp_path / "dist"
+        dist.mkdir()
+        config = {
+            "booking_link": "https://example.com/book",
+            "trading_name_line": "Test Trading Name",
+        }
+        build_report_page(
+            md_path=md_path,
+            pdf_path=pdf_path,
+            slug="mdrender",
+            dist=dist,
+            config=config,
+        )
+        html = (dist / "r" / "mdrender" / "index.html").read_text()
+        main = extract_report_main_html(html)
+        assert "<strong>" in main
+        assert_no_raw_markdown_emphasis(main)
+        assert "PLACEHOLDER_" not in main
 
 
 class TestReportPageContent:
@@ -542,3 +609,11 @@ class TestSampleReportBuild:
         real_firms = ["Beever and Struthers", "DJH Mitten Clarke", "Xeinadin"]
         for firm in real_firms:
             assert firm not in html, f"Sample should not mention real firm '{firm}'"
+
+    def test_sample_report_body_has_no_raw_markdown(self, built_sample):
+        """Sample /r/sample/ page must render markdown (no literal ** or * emphasis)."""
+        html_path = built_sample / "r" / "sample" / "index.html"
+        html = html_path.read_text()
+        main = extract_report_main_html(html)
+        assert_no_raw_markdown_emphasis(main)
+        assert "PLACEHOLDER_" not in html

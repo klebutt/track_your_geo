@@ -90,29 +90,159 @@ def generate_slug() -> str:
     return secrets.token_urlsafe(9)
 
 
-def markdown_to_html(md_text: str) -> str:
-    """Convert markdown to HTML, with fallback if markdown library missing."""
-    if HAS_MARKDOWN:
-        return markdown.markdown(md_text, extensions=["tables"])
-    # Basic fallback conversion
-    html_lines = []
-    for line in md_text.split("\n"):
-        line = line.rstrip()
+def _normalize_html_ampersands(html: str) -> str:
+    """Escape bare & in HTML while leaving existing entities intact."""
+    return re.sub(
+        r"&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)",
+        "&amp;",
+        html,
+    )
+
+
+def _render_inline_markdown(text: str) -> str:
+    """Render inline markdown (links, bold, italic) with HTML escaping."""
+    if not text:
+        return ""
+
+    link_pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+
+    def split_links(s: str) -> str:
+        out: list[str] = []
+        pos = 0
+        for m in link_pattern.finditer(s):
+            if m.start() > pos:
+                out.append(_render_inline_markdown_emphasis(s[pos : m.start()]))
+            label = _render_inline_markdown_emphasis(m.group(1))
+            href = escape_html(m.group(2).strip())
+            out.append(f'<a href="{href}">{label}</a>')
+            pos = m.end()
+        if pos < len(s):
+            out.append(_render_inline_markdown_emphasis(s[pos:]))
+        return "".join(out)
+
+    return split_links(text)
+
+
+def _render_inline_markdown_emphasis(text: str) -> str:
+    """Bold/italic on a segment with no link syntax."""
+    parts: list[str] = []
+    i = 0
+    while i < len(text):
+        if text.startswith("**", i):
+            end = text.find("**", i + 2)
+            if end != -1:
+                inner = _render_inline_markdown_emphasis(text[i + 2 : end])
+                parts.append(f"<strong>{inner}</strong>")
+                i = end + 2
+                continue
+        if text[i] == "*" and (i == 0 or text[i - 1] != "*"):
+            end = i + 1
+            while end < len(text):
+                if text[end] == "*" and (end + 1 >= len(text) or text[end + 1] != "*"):
+                    inner = escape_html(text[i + 1 : end])
+                    parts.append(f"<em>{inner}</em>")
+                    i = end + 1
+                    break
+                end += 1
+            else:
+                parts.append(escape_html(text[i]))
+                i += 1
+                continue
+        parts.append(escape_html(text[i]))
+        i += 1
+    return "".join(parts)
+
+
+def _markdown_to_html_fallback(md_text: str) -> str:
+    """Convert customer-report markdown to HTML without the markdown package."""
+    lines = md_text.split("\n")
+    html_parts: list[str] = []
+    list_open = False
+    table_rows: list[list[str]] = []
+    i = 0
+
+    def close_list() -> None:
+        nonlocal list_open
+        if list_open:
+            html_parts.append("</ul>")
+            list_open = False
+
+    def flush_table() -> None:
+        nonlocal table_rows
+        if not table_rows:
+            return
+        while table_rows and all(not c.strip() for c in table_rows[0]):
+            table_rows.pop(0)
+        if not table_rows:
+            return
+        html_parts.append("<table>")
+        for row_idx, row in enumerate(table_rows):
+            tag = "th" if row_idx == 0 else "td"
+            html_parts.append("<tr>")
+            for cell in row:
+                cell_html = _render_inline_markdown(cell.strip())
+                html_parts.append(f"<{tag}>{cell_html}</{tag}>")
+            html_parts.append("</tr>")
+        html_parts.append("</table>")
+        table_rows = []
+
+    while i < len(lines):
+        line = lines[i].rstrip()
+        if line.startswith("|") and "|" in line[1:]:
+            close_list()
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if all(re.match(r"^[-:]+$", c) for c in cells):
+                i += 1
+                continue
+            table_rows.append(cells)
+            i += 1
+            continue
+        flush_table()
+
         if line.startswith("# "):
-            html_lines.append(f"<h1>{escape_html(line[2:])}</h1>")
+            close_list()
+            html_parts.append(f"<h1>{_render_inline_markdown(line[2:])}</h1>")
         elif line.startswith("## "):
-            html_lines.append(f"<h2>{escape_html(line[3:])}</h2>")
+            close_list()
+            html_parts.append(f"<h2>{_render_inline_markdown(line[3:])}</h2>")
         elif line.startswith("### "):
-            html_lines.append(f"<h3>{escape_html(line[4:])}</h3>")
+            close_list()
+            html_parts.append(f"<h3>{_render_inline_markdown(line[4:])}</h3>")
         elif line.startswith("#### "):
-            html_lines.append(f"<h4>{escape_html(line[5:])}</h4>")
+            close_list()
+            html_parts.append(f"<h4>{_render_inline_markdown(line[5:])}</h4>")
+        elif line.startswith("> "):
+            close_list()
+            html_parts.append(f"<blockquote><p>{_render_inline_markdown(line[2:])}</p></blockquote>")
+        elif re.match(r"^---+\s*$", line):
+            close_list()
+            html_parts.append("<hr />")
         elif line.startswith("- "):
-            html_lines.append(f"<li>{escape_html(line[2:])}</li>")
-        elif line.startswith("|"):
-            continue  # Skip table rows in fallback
+            if not list_open:
+                html_parts.append("<ul>")
+                list_open = True
+            html_parts.append(f"<li>{_render_inline_markdown(line[2:])}</li>")
         elif line.strip():
-            html_lines.append(f"<p>{escape_html(line)}</p>")
-    return "\n".join(html_lines)
+            close_list()
+            html_parts.append(f"<p>{_render_inline_markdown(line)}</p>")
+        else:
+            close_list()
+        i += 1
+
+    flush_table()
+    close_list()
+    return "\n".join(html_parts)
+
+
+def markdown_to_html(md_text: str) -> str:
+    """Convert markdown to HTML (bold/italic, links, lists, tables, blockquotes)."""
+    if HAS_MARKDOWN:
+        html = markdown.markdown(
+            md_text,
+            extensions=["tables", "nl2br"],
+        )
+        return _normalize_html_ampersands(html)
+    return _markdown_to_html_fallback(md_text)
 
 
 def escape_html(text: str) -> str:
