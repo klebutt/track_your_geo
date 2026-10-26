@@ -6,6 +6,7 @@ import time
 
 from sqlalchemy.orm import Session
 
+from tygeo.brand_match import mentions_brand, mentions_phrase
 from tygeo.citations import build_cited_domains, normalize_domain
 from tygeo.config import Settings
 from tygeo.llm import extract_mention_details, run_geo_query_provider, run_recommendations
@@ -130,13 +131,6 @@ def run_geo_query_provider_with_retries(
 
 
 
-def _mentions(text: str, phrase: str) -> bool:
-    phrase = (phrase or "").strip()
-    if not phrase:
-        return False
-    return phrase.lower() in text.lower()
-
-
 def analyze_response(
     response_text: str,
     *,
@@ -144,11 +138,10 @@ def analyze_response(
     competitors: list[str],
     aliases: list[str] | None = None,
 ) -> tuple[bool, dict[str, bool]]:
-    names = [brand, *(aliases or [])]
-    brand_hit = any(_mentions(response_text, name) for name in names)
+    brand_hit = mentions_brand(response_text, brand=brand, aliases=aliases)
     comp: dict[str, bool] = {}
     for c in competitors:
-        comp[c] = _mentions(response_text, c)
+        comp[c] = mentions_phrase(response_text, c)
     return brand_hit, comp
 
 

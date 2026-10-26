@@ -53,6 +53,7 @@ from tygeo.customer_export import (  # noqa: E402
     pdf_filename_for_firm,
     prepare_run_for_customer_export,
 )
+from tygeo.rescore import preview_rescore_run  # noqa: E402
 
 DEFAULT_VAULT = Path(r"G:\My Drive\Obsidian\projects\track-your-geo")
 USD_TO_GBP = 0.79
@@ -403,6 +404,26 @@ def _from_url_body(job: BatchJob) -> dict:
     return body
 
 
+def _rescore_run_api(base_url: str, run_id: int) -> dict:
+    return http_json(
+        "POST",
+        f"{base_url.rstrip('/')}/api/runs/{run_id}/rescore",
+        body={},
+        timeout=180,
+    )
+
+
+def _rescore_preview_summary(run: dict) -> str:
+    stats = preview_rescore_run(run)
+    if not stats.changed:
+        return "scores unchanged"
+    return (
+        f"mentions {stats.mentions_before}→{stats.mentions_after}, "
+        f"visibility {stats.visibility_before:.0%}→{stats.visibility_after:.0%}, "
+        f"composite {stats.composite_before:.1f}→{stats.composite_after:.1f}"
+    )
+
+
 def _export_run(
     run: dict,
     job: BatchJob,
@@ -456,6 +477,7 @@ def run_batch(
     reuse_completed: bool,
     force: bool,
     regenerate: bool,
+    rescore: bool,
     dry_run: bool,
 ) -> int:
     """Run the batch export. Returns exit code."""
@@ -496,7 +518,24 @@ def run_batch(
             extra = f" — {reason}" if reason else ""
             name = job.manifest_firm
             loc = f" · loc={job.location}" if job.location else ""
-            print(f"  [{label}] {name} ({job.url}){loc}{extra}", flush=True)
+            score_note = ""
+            if (
+                regenerate
+                and rescore
+                and action == "regenerate"
+                and run_log_index.get(normalize_url(job.url), {}).get("run_id")
+            ):
+                rid = int(run_log_index[normalize_url(job.url)]["run_id"])
+                try:
+                    run_payload = http_json(
+                        "GET",
+                        f"{base_url.rstrip('/')}/api/runs/{rid}",
+                        timeout=60,
+                    )
+                    score_note = f" · {_rescore_preview_summary(run_payload)}"
+                except Exception:
+                    score_note = " · (start API to preview score changes)"
+            print(f"  [{label}] {name} ({job.url}){loc}{extra}{score_note}", flush=True)
         probe_like = counts["probe"] + counts["rerun"]
         print(
             f"\nSummary: {counts['regenerate']} regenerate · {counts['rerun']} rerun · "
@@ -514,6 +553,13 @@ def run_batch(
             )
         if counts["regenerate"]:
             print("Regenerate rows re-use stored runs (no probe cost).", flush=True)
+            if rescore:
+                print(
+                    "Rescore is ON: stored response_text is re-matched before PDF export.",
+                    flush=True,
+                )
+            else:
+                print("Rescore is OFF (--no-rescore).", flush=True)
         return 0
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -617,6 +663,22 @@ def run_batch(
                 )
                 if run.get("status") != "completed":
                     raise RuntimeError(f"stored run #{run_id} status={run.get('status')}")
+                if rescore:
+                    res = _rescore_run_api(base_url.rstrip("/"), run_id)
+                    if res.get("changed"):
+                        print(
+                            f"  RESCORE run #{run_id}: "
+                            f"mentions {res.get('mentions_before')}→{res.get('mentions_after')}, "
+                            f"composite {res.get('composite_before')}→{res.get('composite_after')}",
+                            flush=True,
+                        )
+                    else:
+                        print(f"  RESCORE run #{run_id}: scores unchanged", flush=True)
+                    run = http_json(
+                        "GET",
+                        f"{base_url.rstrip('/')}/api/runs/{run_id}",
+                        timeout=180,
+                    )
                 prior = completion_index.get(url_key) or {}
                 cost_usd = float(prior.get("run_cost_gbp") or 0.0) / USD_TO_GBP
                 meta = _export_run(run, job, out_dir)
@@ -828,9 +890,11 @@ Input CSV format:
 
 Regenerate (--regenerate):
   Re-render PDFs from the latest run_id per URL in reports/<batch>-run-log.jsonl (no new probes).
-  Use after template or display_name fixes. The local API must still be running to load stored runs.
+  By default also RESCOREs each run (re-match stored replies, no probe cost). Use --no-rescore to skip.
+  The local API must be running to load stored runs and persist rescores.
 
 Dry run labels: REGENERATE, RERUN (location override), PROBE, SKIP.
+With --regenerate, dry run shows per-firm rescore preview when the API is up.
 """,
     )
     ap.add_argument(
@@ -898,6 +962,11 @@ Dry run labels: REGENERATE, RERUN (location override), PROBE, SKIP.
         action="store_true",
         help="Re-render PDFs from stored runs (no new probes); updates manifest sha256",
     )
+    ap.add_argument(
+        "--no-rescore",
+        action="store_true",
+        help="With --regenerate, skip rescore before PDF export (default: rescore on)",
+    )
     args = ap.parse_args()
 
     if args.dedupe_manifest:
@@ -933,6 +1002,19 @@ Dry run labels: REGENERATE, RERUN (location override), PROBE, SKIP.
     print(f"Estimated time: ~{len(batch_jobs) * MINUTES_PER_FIRM:.0f} minutes", flush=True)
     print("", flush=True)
 
+    rescore_on_regenerate = args.regenerate and not args.no_rescore
+
+    if args.dry_run and args.regenerate and rescore_on_regenerate:
+        health = preflight_check(args.base_url)
+        if health is None:
+            print(
+                "Note: start the local API to preview which firms' scores would change.",
+                flush=True,
+            )
+        else:
+            print(f"API health: {health} (rescore preview enabled)", flush=True)
+        print("", flush=True)
+
     if not args.dry_run and not args.regenerate:
         health = preflight_check(args.base_url)
         if health is None:
@@ -959,6 +1041,7 @@ Dry run labels: REGENERATE, RERUN (location override), PROBE, SKIP.
         reuse_completed=reuse_completed,
         force=args.force,
         regenerate=args.regenerate,
+        rescore=rescore_on_regenerate,
         dry_run=args.dry_run,
     )
 

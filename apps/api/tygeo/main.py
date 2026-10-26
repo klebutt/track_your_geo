@@ -175,6 +175,30 @@ def api_get_run(run_id: int, db: Session = Depends(db_session)):
     return row
 
 
+@app.post("/api/runs/{run_id}/rescore")
+def api_rescore_run(run_id: int, db: Session = Depends(db_session)):
+    """Recompute mention flags and scores from stored probe text (no new probes)."""
+    from tygeo.rescore import rescore_run
+
+    row = _load_run(db, run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    try:
+        stats = rescore_run(db, row)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "run_id": run_id,
+        "changed": stats.changed,
+        "mentions_before": stats.mentions_before,
+        "mentions_after": stats.mentions_after,
+        "visibility_before": stats.visibility_before,
+        "visibility_after": stats.visibility_after,
+        "composite_before": stats.composite_before,
+        "composite_after": stats.composite_after,
+    }
+
+
 def _load_run(db: Session, run_id: int) -> Run | None:
     return (
         db.query(Run)
