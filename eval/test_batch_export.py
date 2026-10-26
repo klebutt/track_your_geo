@@ -166,6 +166,7 @@ class TestDryRun:
             reuse_completed=True,
             force=False,
             regenerate=False,
+            rescore=False,
             dry_run=True,
         )
         assert exit_code == 0
@@ -194,6 +195,7 @@ class TestDryRun:
             reuse_completed=True,
             force=False,
             regenerate=False,
+            rescore=False,
             dry_run=True,
         )
 
@@ -499,6 +501,7 @@ class TestCompletionIndex:
             reuse_completed=True,
             force=False,
             regenerate=False,
+            rescore=False,
             dry_run=True,
         )
 
@@ -539,6 +542,7 @@ class TestRemovedPDFRerun:
             reuse_completed=True,
             force=False,
             regenerate=False,
+            rescore=False,
             dry_run=True,
         )
 
@@ -573,6 +577,7 @@ class TestForceFlag:
             reuse_completed=True,
             force=True,
             regenerate=False,
+            rescore=False,
             dry_run=True,
         )
 
@@ -744,6 +749,7 @@ class TestJobPlanning:
             reuse_completed=True,
             force=False,
             regenerate=True,
+            rescore=False,
             dry_run=True,
         )
         out = capsys.readouterr().out

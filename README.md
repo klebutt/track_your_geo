@@ -349,7 +349,7 @@ cd ..
 
 **Useful options:**
 - `--dry-run` — show REGENERATE / RERUN / PROBE / SKIP per firm
-- `--regenerate` — re-render PDFs from stored runs (no probe cost); needs API up to read runs
+- `--regenerate` — re-render PDFs from stored runs (no probe cost); **rescoring is on by default** (re-match stored replies). Use `--no-rescore` to skip. Needs API up to load runs and save rescores.
 - `--reuse-completed` — skip firms with existing PDFs (default: True)
 - `--force` — re-probe every firm even if a PDF exists
 - `--limit N` — process only first N firms
