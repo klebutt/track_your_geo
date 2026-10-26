@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -695,6 +696,13 @@ def export_customer_report(
     if also_markdown:
         md_path = out_dir / pdf_name.replace(".pdf", ".md")
         md_path.write_text(md, encoding="utf-8")
+        from tygeo.customer_web_report import web_run_snapshot
+
+        json_path = md_path.with_name(f"{md_path.stem}.run.json")
+        json_path.write_text(
+            json.dumps(web_run_snapshot(run), ensure_ascii=False, indent=0),
+            encoding="utf-8",
+        )
     return {
         "firm": display_label,
         "pdf_path": str(pdf_path),

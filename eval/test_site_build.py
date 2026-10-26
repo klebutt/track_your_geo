@@ -171,49 +171,73 @@ class TestCopyPublicFiles:
         assert (dist / "index.html").exists()
 
 
+@pytest.fixture
+def fake_report_files(tmp_path):
+    """Fictional customer export .md + .run.json + PDF for report page tests."""
+    import json
+
+    sys.path.insert(0, str(REPO_ROOT / "apps" / "api"))
+    from tygeo.customer_export import build_customer_markdown, pdf_filename_for_firm
+    from tygeo.customer_web_report import web_run_snapshot
+
+    fictional_run = {
+        "status": "completed",
+        "brand_name": "Fictional Accounting Ltd",
+        "model_name": "gpt-5-search-api,perplexity/sonar-pro,gemini/gemini-2.5-flash",
+        "source_url": "https://fictional-accounting.example/",
+        "visibility_rate": 0.6,
+        "composite_score": 55.0,
+        "profile_snapshot": {
+            "location": "Test City, UK",
+            "services": ["Tax", "Payroll"],
+        },
+        "query_results": [
+            {
+                "query_text": "Best accountants in Test City?",
+                "brand_mentioned": True,
+                "competitors_mentioned": {},
+            },
+            {
+                "query_text": "Small business accountant Test City",
+                "brand_mentioned": True,
+                "competitors_mentioned": {},
+            },
+            {
+                "query_text": "VAT accountant near Test City",
+                "brand_mentioned": True,
+                "competitors_mentioned": {},
+            },
+            {
+                "query_text": "Online accountants UK",
+                "brand_mentioned": False,
+                "competitors_mentioned": {"Competitor A": True},
+            },
+            {
+                "query_text": "Payroll services Test City",
+                "brand_mentioned": False,
+                "competitors_mentioned": {},
+            },
+        ],
+    }
+    md_content = build_customer_markdown(fictional_run)
+    pdf_name = pdf_filename_for_firm("Fictional Accounting Ltd")
+    md_path = tmp_path / pdf_name.replace(".pdf", ".md")
+    md_path.write_text(md_content, encoding="utf-8")
+    json_path = tmp_path / pdf_name.replace(".pdf", ".run.json")
+    json_path.write_text(
+        json.dumps(web_run_snapshot(fictional_run), ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    pdf_content = b"%PDF-1.4 fake pdf content for testing"
+    pdf_path = tmp_path / pdf_name
+    pdf_path.write_bytes(pdf_content)
+
+    return md_path, pdf_path
+
+
 class TestBuildReportPage:
     """Test report page generation with fictional fixtures."""
-
-    @pytest.fixture
-    def fake_report_files(self, tmp_path):
-        """Create fake report markdown and PDF for testing."""
-        # Create fake markdown
-        md_content = """# AI recommendation report - Fictional Accounting Ltd
-
-## Your AI recommendation report
-
-This is a test report for a fictional firm.
-
-**AI assistants recommended Fictional Accounting Ltd in 3 of 5 searches**
-
-### Who showed up instead
-
-- **Competitor A** - on "best accountants in Test City"
-
-### What this means
-
-This is the gap summary for the fictional firm.
-
----
-
-## Snapshot (what we measured)
-
-| | |
-|--|--|
-| Firm | Fictional Accounting Ltd |
-| Location used | Test City, UK |
-| Visibility (probes with brand name in reply) | **60%** |
-| Composite index | **55.0** / 100 |
-"""
-        md_path = tmp_path / "fictional-report.md"
-        md_path.write_text(md_content)
-
-        # Create fake PDF (just some bytes)
-        pdf_content = b"%PDF-1.4 fake pdf content for testing"
-        pdf_path = tmp_path / "Fictional-Accounting-Ltd-AI-recommend.pdf"
-        pdf_path.write_bytes(pdf_content)
-
-        return md_path, pdf_path
 
     def test_builds_report_page(self, tmp_path, fake_report_files):
         """Report page should be generated from markdown and PDF."""
@@ -334,29 +358,22 @@ This is the gap summary for the fictional firm.
         )
         html = (dist / "r" / "mdrender" / "index.html").read_text()
         main = extract_report_main_html(html)
+        assert 'class="report-hero-score"' in main
+        assert 'data-score="3-of-5"' in main
         assert "<strong>" in main
         assert_no_raw_markdown_emphasis(main)
         assert "PLACEHOLDER_" not in main
+        assert 'href="https://airecommend.co.uk/book"' in main
+        assert 'href="mailto:kieran@airecommend.co.uk"' in main
 
 
 class TestReportPageContent:
     """Test report page HTML content."""
 
     @pytest.fixture
-    def built_report(self, tmp_path):
+    def built_report(self, tmp_path, fake_report_files):
         """Build a report page and return its HTML."""
-        md_content = """# AI recommendation report - Test Firm Ltd
-
-## Your AI recommendation report
-
-Test content here.
-"""
-        md_path = tmp_path / "test.md"
-        md_path.write_text(md_content)
-
-        pdf_path = tmp_path / "test.pdf"
-        pdf_path.write_bytes(b"%PDF-1.4 test")
-
+        md_path, pdf_path = fake_report_files
         dist = tmp_path / "dist"
         dist.mkdir()
 
@@ -617,3 +634,13 @@ class TestSampleReportBuild:
         main = extract_report_main_html(html)
         assert_no_raw_markdown_emphasis(main)
         assert "PLACEHOLDER_" not in html
+
+    def test_sample_has_hero_score_and_linkified_cta(self, built_sample):
+        """Sample page should show PDF-style score card and linked book/email in body."""
+        html_path = built_sample / "r" / "sample" / "index.html"
+        html = html_path.read_text()
+        main = extract_report_main_html(html)
+        assert 'class="report-hero-score"' in main
+        assert "data-score=" in main
+        assert 'href="https://airecommend.co.uk/book"' in main
+        assert 'href="mailto:kieran@airecommend.co.uk"' in main
