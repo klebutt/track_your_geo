@@ -484,14 +484,8 @@ a:hover {
   font-weight: 700;
   color: var(--color-primary);
   line-height: 1.1;
-}
-
-.report-hero-x {
-  font-size: clamp(2.25rem, 8vw, 2.75rem);
-}
-
-.report-hero-of {
-  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-size: clamp(2.25rem, 8vw, 2.85rem);
+  letter-spacing: -0.02em;
 }
 
 .report-hero-caption {
@@ -533,14 +527,21 @@ a:hover {
 }
 
 .report-loss-list {
-  margin: 0.5rem 0 0;
-  padding-left: 1.15rem;
+  list-style: disc;
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
 }
 
 .report-loss-list li {
-  margin-bottom: 0.35rem;
+  margin: 0 0 0.55rem;
+  padding: 0;
   font-size: 0.95rem;
+  line-height: 1.45;
   color: var(--color-text-muted);
+}
+
+.report-loss-list li:last-child {
+  margin-bottom: 0;
 }
 
 .report-snapshot-meta {
@@ -591,6 +592,26 @@ a:hover {
 .report-content a {
   color: var(--color-primary);
   word-break: break-word;
+}
+
+.report-actions .btn {
+  color: inherit;
+}
+
+.report-actions .btn-primary {
+  color: #fff;
+}
+
+.report-actions .btn-primary:hover {
+  color: #fff;
+}
+
+.report-actions .btn-secondary {
+  color: var(--color-primary);
+}
+
+.report-actions .btn-secondary:hover {
+  color: #fff;
 }
 
 .report-actions {

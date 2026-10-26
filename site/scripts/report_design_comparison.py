@@ -111,23 +111,27 @@ def _export_bundle(run: dict, out_dir: Path) -> tuple[Path, Path]:
 
 
 def _build_pages(dist: Path, repo: Path, bundles: dict[str, tuple[Path, Path]], sample: bool) -> None:
-    sys.path.insert(0, str(repo / "site"))
-    from build import build_report_page, build_sample_report, copy_public_files, load_config
-
+    """Build dist using site/build from repo in a fresh Python process (no import cache bleed)."""
     if dist.exists():
         shutil.rmtree(dist)
-    config = load_config()
-    copy_public_files(dist, config)
+    bundles_json = {
+        slug: [str(md.resolve()), str(pdf.resolve())]
+        for slug, (md, pdf) in bundles.items()
+    }
+    helper = REPO / "site/scripts/build_comparison_dist.py"
+    cmd = [
+        sys.executable,
+        str(helper),
+        "--repo-root",
+        str(repo.resolve()),
+        "--dist",
+        str(dist.resolve()),
+        "--bundles",
+        json.dumps(bundles_json),
+    ]
     if sample:
-        build_sample_report(dist, config)
-    for slug, (md, pdf) in bundles.items():
-        build_report_page(
-            md_path=md,
-            pdf_path=pdf,
-            slug=slug,
-            dist=dist,
-            config=config,
-        )
+        cmd.append("--sample")
+    subprocess.run(cmd, check=True, cwd=str(repo.resolve()))
 
 
 def main() -> int:

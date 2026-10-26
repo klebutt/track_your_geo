@@ -341,10 +341,7 @@ def build_customer_report_body_html(run: dict[str, Any]) -> str:
         f'aria-label="{html_escape(f"{x} of {n} customer-intent searches", quote=True)}">'
     )
     parts.append(
-        f'<p class="report-hero-number">'
-        f'<span class="report-hero-x">{x}</span> '
-        f'<span class="report-hero-of">of {n}</span>'
-        f"</p>"
+        f'<p class="report-hero-number">{html_escape(f"{x} of {n}", quote=True)}</p>'
     )
     parts.append(
         '<p class="report-hero-caption">'
@@ -368,7 +365,7 @@ def build_customer_report_body_html(run: dict[str, Any]) -> str:
             parts.append(
                 "<li>"
                 f"<strong>{html_escape(names, quote=True)}</strong> "
-                f'on &ldquo;{html_escape(q, quote=True)}&rdquo;'
+                f"- on &ldquo;{html_escape(q, quote=True)}&rdquo;"
                 "</li>"
             )
         parts.append("</ul>")
