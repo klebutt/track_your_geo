@@ -1,5 +1,6 @@
 """Tests for customer PDF/markdown export (Sales Change-now locks)."""
 
+import json
 import re
 from pathlib import Path
 
@@ -127,6 +128,17 @@ def test_no_loss_entries_competitor_line_once():
     who = md[md.index("### Who showed up instead") : md.index("### What this means")]
     needle = "no tracked competitors were named"
     assert who.lower().count(needle) == 1
+
+
+def test_export_writes_run_json_sidecar(tmp_path: Path):
+    """Export should write .run.json for site HTML rebuild."""
+    out = export_customer_report(_sample_run(), tmp_path)
+    md_path = Path(out["md_path"])
+    json_path = md_path.with_name(f"{md_path.stem}.run.json")
+    assert json_path.is_file()
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    assert data["brand_name"] == "Hewitt Accountancy"
+    assert data["query_results"]
 
 
 def test_export_writes_pdf(tmp_path: Path):

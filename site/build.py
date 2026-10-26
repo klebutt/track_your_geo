@@ -282,6 +282,7 @@ def build_report_page(
     dist: Path,
     config: dict,
     expected_sha256: str | None = None,
+    run: dict | None = None,
 ) -> dict:
     """Build a single report page from markdown and PDF.
 
@@ -310,8 +311,14 @@ def build_report_page(
     pdf_filename = pdf_path.name
     shutil.copy2(pdf_path, report_dir / pdf_filename)
 
-    # Convert markdown to HTML
-    report_html = markdown_to_html(md_text)
+    from tygeo.customer_web_report import (
+        build_customer_report_body_html,
+        load_web_run,
+    )
+
+    if run is None:
+        run = load_web_run(md_path, md_text)
+    report_html = build_customer_report_body_html(run)
 
     # Load and fill template
     template_path = TEMPLATES_DIR / "report.html"
@@ -423,6 +430,7 @@ def build_sample_report(dist: Path, config: dict) -> None:
         slug="sample",
         dist=dist,
         config=config,
+        run=sample_run,
     )
 
     # Copy PDF to root for landing page link
