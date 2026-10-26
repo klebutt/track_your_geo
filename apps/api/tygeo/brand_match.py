@@ -45,6 +45,10 @@ _GENERIC_LISTING_RE = re.compile(
 
 _CO_TRADING_RE = re.compile(r"^(.+?)\s*&\s*Co\.?$", re.IGNORECASE)
 
+_DIRECTORY_PREFIXES = frozenset(
+    {"your", "the", "find", "top", "best", "local", "nearby"}
+)
+
 
 def strip_urls_for_matching(text: str) -> str:
     """Remove link targets and URL/domain paths before mention matching."""
@@ -193,12 +197,30 @@ def build_matching_aliases(
     return out
 
 
+def _phrase_blocked_by_directory_prefix(text: str, phrase: str) -> bool:
+    """Reject when phrase is part of a longer directory-style name (e.g. Your Town Accountants)."""
+    p = (phrase or "").strip()
+    if not p:
+        return False
+    chunks: list[str] = [text]
+    chunks.extend(re.findall(r"\*\*([^*]+)\*\*", text))
+    chunks.extend(re.findall(r"[\"“”']([^\"“”']+)[\"“”']", text))
+    escaped = re.escape(p)
+    for chunk in chunks:
+        m = re.search(rf"\b([A-Z][a-z]+)\s+{escaped}\b", chunk)
+        if m and m.group(1).lower() in _DIRECTORY_PREFIXES:
+            return True
+    return False
+
+
 def mentions_phrase(text: str, phrase: str) -> bool:
     """Whether ``phrase`` appears as a whole token sequence in ``text``."""
     phrase = (phrase or "").strip()
     if not phrase:
         return False
     visible = strip_urls_for_matching(text)
+    if _phrase_blocked_by_directory_prefix(visible, phrase):
+        return False
     norm_text = normalize_mention_text(visible)
     norm_phrase = normalize_mention_phrase(phrase)
     if not norm_phrase or not _token_sequence_match(norm_text, norm_phrase):

@@ -59,6 +59,38 @@ def test_format_query_display_normalizes_dash_spacing():
     assert format_query_display(q) == "Best firms in the UK - list options?"
 
 
+def test_format_query_display_keeps_intra_word_hyphens():
+    q = "Best-rated independent accountant in the UK?"
+    assert format_query_display(q) == q
+
+
+def test_loss_entry_query_uses_dash_normalisation():
+    from tygeo.plain_report import LossEntry
+
+    run = prepare_run_for_customer_export(
+        {
+            "status": "completed",
+            "brand_name": "Fictional Firm",
+            "model_name": "gpt-5-search-api",
+            "visibility_rate": 0.0,
+            "composite_score": 10.0,
+            "profile_snapshot": {},
+            "query_results": [
+                {
+                    "query_text": "Best firms in the UK  —  list options?",
+                    "brand_mentioned": False,
+                    "competitors_mentioned": {"Rival Co": True},
+                    "model_name": "gpt-5-search-api",
+                },
+            ],
+        },
+        display_name="Fictional Firm",
+    )
+    md = build_customer_markdown(run)
+    assert "UK  -  list" not in md
+    assert "UK - list" in md
+
+
 def test_export_report_date_set_on_regenerate_prepare():
     run = prepare_run_for_customer_export(
         _minimal_run(),

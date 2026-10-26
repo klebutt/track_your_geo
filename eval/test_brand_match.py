@@ -95,6 +95,24 @@ def test_co_trading_alias_accountants_variant():
     assert mentions_brand(reply, brand=brand, aliases=aliases)
 
 
+def test_directory_your_prefix_not_competitor_match():
+    phrase = "Sampleville Accountants"
+    reply = (
+        '"Your Sampleville Accountants" listings – They list several firms in the area.'
+    )
+    assert not mentions_phrase(reply, phrase)
+    reply2 = "**Your Sampleville Accountants** — provides bookkeeping templates."
+    assert not mentions_phrase(reply2, phrase)
+    reply3 = "See https://yoursamplevilleaccountants.example/about for a directory."
+    assert not mentions_phrase(reply3, phrase)
+
+
+def test_real_competitor_name_still_matches():
+    phrase = "Sampleville Accountants"
+    reply = "Clients often choose Sampleville Accountants for year-end accounts."
+    assert mentions_phrase(reply, phrase)
+
+
 def test_sync_mention_position():
     assert sync_mention_position(True, "not_mentioned") == "secondary"
     assert sync_mention_position(False, "first_mentioned") == "not_mentioned"

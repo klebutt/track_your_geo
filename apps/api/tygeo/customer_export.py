@@ -81,9 +81,10 @@ def prepare_run_for_customer_export(
 
 
 def format_query_display(query: str) -> str:
-    """Normalize dashes and whitespace for customer-facing question lists."""
-    s = (query or "").replace(EM_DASH, " - ").replace("\u2013", " - ")
-    s = re.sub(r"\s*-\s*", " - ", s)
+    """Normalize spaced dashes for display; keep intra-word hyphens (e.g. Best-rated)."""
+    s = query or ""
+    s = re.sub(r"\s*[\u2014\u2013—]\s*", " - ", s)
+    s = re.sub(r"\s+-\s+", " - ", s)
     s = re.sub(r" +", " ", s)
     return s.strip()
 
@@ -169,7 +170,7 @@ def build_customer_markdown(run: dict[str, Any]) -> str:
             lines.append("")
         for entry in pr.loss_entries:
             names = ", ".join(entry.competitors) if entry.competitors else "Other firms"
-            q = _no_em(entry.query)
+            q = _no_em(format_query_display(entry.query))
             lines.append(f"- **{names}** - on “{q}”")
         lines.append("")
     else:
@@ -544,7 +545,7 @@ def write_customer_pdf(run: dict[str, Any], dest: Path, *, firm: str) -> Path:
         for entry in pr.loss_entries:
             names = ", ".join(entry.competitors) if entry.competitors else "Other firms"
             write_md(
-                f"**{names}** - on \"{_no_em(entry.query)}\"",
+                f"**{names}** - on \"{_no_em(format_query_display(entry.query))}\"",
                 size=10,
                 gap=0.5,
                 lh=4.8,
