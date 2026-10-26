@@ -574,7 +574,14 @@ def create_pending_url_run(
     return run
 
 
-def finish_url_run_probes(run_id: int, url: str, *, vertical: str) -> None:
+def finish_url_run_probes(
+    run_id: int,
+    url: str,
+    *,
+    vertical: str,
+    location_override: str | None = None,
+    display_name: str | None = None,
+) -> None:
     """Background worker: infer profile from URL then execute probes."""
     from tygeo.config import Settings as SettingsCls
     from tygeo.db import new_session
@@ -589,7 +596,10 @@ def finish_url_run_probes(run_id: int, url: str, *, vertical: str) -> None:
         try:
             normalized = normalize_url(url)
             pilot, infer_usage = infer_pilot_from_url(
-                settings, normalized, vertical=vertical
+                settings,
+                normalized,
+                vertical=vertical,
+                location_override=location_override,
             )
         except Exception as exc:
             logger.exception("URL inference failed for run %s", run_id)
@@ -606,7 +616,10 @@ def finish_url_run_probes(run_id: int, url: str, *, vertical: str) -> None:
         run.brand_name = pilot.brand_name
         run.location = pilot.location
         run.source_url = pilot.url or normalized
-        run.profile_snapshot = pilot_snapshot(pilot)
+        snap = pilot_snapshot(pilot)
+        if display_name and str(display_name).strip():
+            snap["display_name"] = str(display_name).strip()
+        run.profile_snapshot = snap
         db.commit()
 
         execute_run(

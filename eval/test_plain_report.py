@@ -100,7 +100,7 @@ def test_plain_report_mixed_wins_and_competitor_losses():
     assert "cited as a source" in report.index_note.lower()
     assert "compass" in report.index_note.lower()
     assert "gpt-5-search-api" not in (report.models_note or "")
-    assert "OpenAI search" in (report.models_note or "")
+    assert "ChatGPT search" in (report.models_note or "")
     assert "Most often named instead" not in (report.meaning or "")
     assert "\u2014" not in (report.what_this_is or "")
     assert "\u2014" not in (report.index_note or "")
@@ -125,6 +125,19 @@ def test_plain_report_zero_visibility():
     assert report.loss_queries == ["Q2"]
     assert report.loss_entries[0].competitors == ["Rival"]
     assert "did not appear" in (report.gap_summary or "").lower()
+
+
+def test_plain_report_all_wins_competitor_copy():
+    rows = [_row(f"Q{i}", brand=True) for i in range(10)]
+    report = build_plain_report(
+        status="completed",
+        brand_name="Acme Tax",
+        query_results=rows,
+    )
+    assert report.searches_recommended == 10
+    assert report.competitor_summary
+    assert "every search" in report.competitor_summary.lower()
+    assert "missing" not in report.competitor_summary.lower()
 
 
 def test_plain_report_miss_without_tracked_competitors():

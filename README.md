@@ -303,10 +303,16 @@ Use `scripts/batch_export.py` to generate PDF reports for a list of firms. The s
 
 **Input CSV format:**
 ```csv
-firm_name,url
-"Example Accountants Ltd","https://example-accountants.co.uk"
-"Test & Partners","https://testandpartners.example"
+firm_name,url,location,display_name
+"Example Accountants Ltd","https://example-accountants.co.uk",,
+"Rooke & Co Accountants Limited","https://rooke.example","Derby, UK","Rooke & Co"
 ```
+
+Optional columns:
+- `location` — town used in probe questions (overrides website inference). Changing it on a completed firm triggers a **rerun** on the next normal batch.
+- `display_name` — trading name shown on the PDF. Brand-mention matching still uses names inferred from the website (so a different firm with a similar name is not counted as you).
+
+**Display vs matching:** `display_name` affects report copy and filenames only. Probes and `brand_mentioned` flags use the inferred `brand_name` and aliases stored on the run.
 
 **Windows PowerShell commands:**
 
@@ -342,9 +348,10 @@ cd ..
 - `reports/wave2-pdfs/` — PDF and markdown files
 
 **Useful options:**
-- `--dry-run` — show what would happen without running probes
+- `--dry-run` — show REGENERATE / RERUN / PROBE / SKIP per firm
+- `--regenerate` — re-render PDFs from stored runs (no probe cost); needs API up to read runs
 - `--reuse-completed` — skip firms with existing PDFs (default: True)
-- `--force` — regenerate even if PDF exists
+- `--force` — re-probe every firm even if a PDF exists
 - `--limit N` — process only first N firms
 - `--offset N` — skip first N firms
 

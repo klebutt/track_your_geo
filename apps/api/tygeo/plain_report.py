@@ -62,7 +62,7 @@ INDEX_NOTE = (
 
 # Customer-facing model labels (never expose raw provider IDs in report copy).
 MODEL_DISPLAY_NAMES: dict[str, str] = {
-    "gpt-5-search-api": "OpenAI search",
+    "gpt-5-search-api": "ChatGPT search",
     "perplexity/sonar-pro": "Perplexity",
     "gemini/gemini-2.5-flash": "Gemini",
 }
@@ -207,6 +207,11 @@ def build_plain_report(
     if top_names:
         competitor_summary = (
             "Most often named instead: " + ", ".join(top_names) + "."
+        )
+    elif x == n:
+        competitor_summary = (
+            "You were named on every search in this set, so there is no "
+            "'who showed up instead' gap to report."
         )
     elif brand_miss_no_comp and x < n:
         competitor_summary = (
