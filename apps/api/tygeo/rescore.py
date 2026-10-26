@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from tygeo.analysis import aggregate_composite_score, analyze_response
+from tygeo.brand_match import sync_mention_position
 from tygeo.models import QueryResult, Recommendation, Run
 
 
@@ -29,18 +30,22 @@ class RescoreStats:
         )
 
 
-def _brand_context_from_run(run: Run | dict[str, Any]) -> tuple[str, list[str], list[str]]:
+def _brand_context_from_run(
+    run: Run | dict[str, Any],
+) -> tuple[str, list[str], list[str], str | None]:
     if isinstance(run, dict):
         snap = run.get("profile_snapshot") or {}
         brand = str(run.get("brand_name") or snap.get("brand_name") or "").strip()
         aliases = [str(a) for a in (snap.get("aliases") or []) if str(a).strip()]
         competitors = [str(c) for c in (snap.get("competitors") or []) if str(c).strip()]
-        return brand, aliases, competitors
+        display = str(snap.get("display_name") or "").strip() or None
+        return brand, aliases, competitors, display
     snap = run.profile_snapshot or {}
     brand = str(run.brand_name or snap.get("brand_name") or "").strip()
     aliases = [str(a) for a in (snap.get("aliases") or []) if str(a).strip()]
     competitors = [str(c) for c in (snap.get("competitors") or []) if str(c).strip()]
-    return brand, aliases, competitors
+    display = str(snap.get("display_name") or "").strip() or None
+    return brand, aliases, competitors, display
 
 
 def _row_dict(row: Any) -> dict[str, Any]:
@@ -60,7 +65,7 @@ def _row_dict(row: Any) -> dict[str, Any]:
 
 def preview_rescore_run(run: Run | dict[str, Any]) -> RescoreStats:
     """Compute before/after stats without mutating storage."""
-    brand, aliases, competitors = _brand_context_from_run(run)
+    brand, aliases, competitors, display = _brand_context_from_run(run)
     rows = (
         list(run.get("query_results") or [])
         if isinstance(run, dict)
@@ -85,16 +90,18 @@ def preview_rescore_run(run: Run | dict[str, Any]) -> RescoreStats:
             brand=brand,
             competitors=competitors,
             aliases=aliases,
+            display_name=display,
         )
         if brand_hit:
             mentions_after += 1
         sentiment = str(row.get("sentiment") or "neutral")
         position = str(row.get("mention_position") or "not_mentioned")
         relevance = float(row.get("relevance_score") or 0.0)
-        if brand_hit and not prev_hit:
-            sentiment, position, relevance = "neutral", "secondary", 0.5
-        elif not brand_hit:
+        if not brand_hit:
             sentiment, position, relevance = "neutral", "not_mentioned", 0.0
+        elif not prev_hit:
+            sentiment, position, relevance = "neutral", "secondary", 0.5
+        position = sync_mention_position(brand_hit, position)
 
         before_results.append(
             {
@@ -135,7 +142,7 @@ def rescore_run(db: Session, run: Run) -> RescoreStats:
         raise ValueError(f"Run {run.id} is not completed (status={run.status})")
 
     stats = preview_rescore_run(run)
-    brand, aliases, competitors = _brand_context_from_run(run)
+    brand, aliases, competitors, display = _brand_context_from_run(run)
 
     for qr in run.query_results:
         prev_hit = bool(qr.brand_mentioned)
@@ -145,6 +152,7 @@ def rescore_run(db: Session, run: Run) -> RescoreStats:
             brand=brand,
             competitors=competitors,
             aliases=aliases,
+            display_name=display,
         )
         qr.brand_mentioned = brand_hit
         qr.competitors_mentioned = comp
@@ -156,6 +164,7 @@ def rescore_run(db: Session, run: Run) -> RescoreStats:
             qr.sentiment = "neutral"
             qr.mention_position = "not_mentioned"
             qr.relevance_score = 0.0
+        qr.mention_position = sync_mention_position(qr.brand_mentioned, qr.mention_position)
 
     result_rows = [
         {
