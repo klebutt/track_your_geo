@@ -821,7 +821,7 @@ Completion detection (--reuse-completed, on by default):
 Input CSV format:
   firm_name,url[,location][,display_name]
   "Example Accountants Ltd","https://example-accountants.co.uk"
-  "Rooke and Co Accountants Limited","https://rooke.example","Derby, UK","Rooke & Co"
+  "Riverside & Co Accountants Limited","https://riverside-accountants.example","Derby, UK","Riverside & Co"
 
   location — used in probe questions instead of inferred town (also triggers rerun when changed)
   display_name — trading name on the PDF only; brand matching still uses the inferred legal/trading names from the site

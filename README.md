@@ -305,7 +305,7 @@ Use `scripts/batch_export.py` to generate PDF reports for a list of firms. The s
 ```csv
 firm_name,url,location,display_name
 "Example Accountants Ltd","https://example-accountants.co.uk",,
-"Rooke & Co Accountants Limited","https://rooke.example","Derby, UK","Rooke & Co"
+"Riverside & Co Accountants Limited","https://riverside-accountants.example","Derby, UK","Riverside & Co"
 ```
 
 Optional columns:

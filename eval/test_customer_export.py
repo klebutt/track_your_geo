@@ -54,11 +54,11 @@ def _sample_run(**overrides):
 
 
 def test_prose_brand_avoids_double_full_stop():
-    assert prose_brand("Tim Taylor & Co.") == "Tim Taylor & Co"
-    run = _sample_run(brand_name="Tim Taylor & Co.")
+    assert prose_brand("Sample Taylor & Co.") == "Sample Taylor & Co"
+    run = _sample_run(brand_name="Sample Taylor & Co.")
     md = build_customer_markdown(run)
     assert "Co.." not in md
-    assert "**Tim Taylor & Co**." in md or "named **Tim Taylor & Co**." in md
+    assert "**Sample Taylor & Co**." in md or "named **Sample Taylor & Co**." in md
 
 
 def test_pdf_filename():

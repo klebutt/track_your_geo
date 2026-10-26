@@ -98,13 +98,13 @@ class TestCSVParsing:
         csv_file = tmp_path / "firms.csv"
         csv_file.write_text(
             "firm_name,url,location,display_name\n"
-            "Legal Name Ltd,https://firm.example,Derby UK,Rooke & Co\n"
+            "Riverside & Co Accountants Limited,https://riverside-accountants.example,Derby UK,Riverside & Co\n"
         )
         jobs = load_jobs(csv_file)
         assert len(jobs) == 1
         assert jobs[0].location == "Derby UK"
-        assert jobs[0].display_name == "Rooke & Co"
-        assert jobs[0].manifest_firm == "Rooke & Co"
+        assert jobs[0].display_name == "Riverside & Co"
+        assert jobs[0].manifest_firm == "Riverside & Co"
 
     def test_load_jobs_strips_whitespace(self, tmp_path):
         """Should strip whitespace from firm names and URLs."""
