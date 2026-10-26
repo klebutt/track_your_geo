@@ -109,6 +109,19 @@ def test_plain_report_mixed_wins_and_competitor_losses():
         assert "\u2014" not in item.detail
 
 
+def test_plain_report_low_visibility_wording():
+    rows = [_row(f"Q{i}", brand=(i == 0)) for i in range(10)]
+    report = build_plain_report(
+        status="completed",
+        brand_name="Fictional Firm",
+        query_results=rows,
+    )
+    assert report.searches_recommended == 1
+    assert report.searches_total == 10
+    assert "only 1 of 10" in (report.gap_summary or "").lower()
+    assert "some searches but not others" not in (report.gap_summary or "").lower()
+
+
 def test_plain_report_zero_visibility():
     rows = [
         _row("Q1", brand=False, competitors={"Rival": False}),

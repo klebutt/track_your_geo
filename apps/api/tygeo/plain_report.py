@@ -192,6 +192,11 @@ def build_plain_report(
         gap_summary = (
             f"{brand} appeared in every search we asked - a strong signal for this set."
         )
+    elif n >= 10 and x <= 2:
+        gap_summary = (
+            f"{brand} appeared in only {x} of {n} searches. "
+            "That is a weak signal for this set."
+        )
     elif loss_entries:
         gap_summary = (
             f"{brand} showed up in some searches, but competitors appeared without them "
