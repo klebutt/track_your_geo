@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+from conftest import requires_openai_api_key
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -31,6 +32,7 @@ def test_enabled_probe_models_splits_csv():
     ]
 
 
+@requires_openai_api_key
 def test_execute_run_fan_out_per_query():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(bind=engine)

@@ -3,6 +3,8 @@
 import json
 from unittest.mock import MagicMock, patch
 
+from conftest import requires_openai_api_key
+
 from tygeo.analysis import (
     aggregate_composite_score,
     composite_score,
@@ -125,6 +127,7 @@ def test_aggregate_composite_score_averages_rows():
     assert 0 <= score <= 100
 
 
+@requires_openai_api_key
 def test_execute_run_skips_extraction_when_brand_not_visible():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -185,6 +188,7 @@ def test_execute_run_skips_extraction_when_brand_not_visible():
     db.close()
 
 
+@requires_openai_api_key
 def test_execute_run_runs_extraction_when_brand_visible():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker

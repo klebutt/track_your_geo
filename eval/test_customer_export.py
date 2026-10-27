@@ -174,7 +174,7 @@ def test_pdf_has_no_raw_markdown_markers(tmp_path: Path):
     assert "GBP" not in text
     # Heading appears once
     assert text.lower().count("your ai recommendation report") == 1
-    assert "OpenAI search" in text
+    assert "ChatGPT search" in text
 
 
 def test_pdf_has_run_date(tmp_path: Path):

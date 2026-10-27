@@ -17,3 +17,11 @@
 
 - `npx @fission-ai/openspec@latest validate --all --strict` — all six specs pass (strict)
 - `python3 -m pytest eval -q` — 210 passed, 4 failed (pre-existing/env: fake probe models skipped without `OPENAI_API_KEY`; PDF model label expects "OpenAI search" while copy uses "ChatGPT search")
+
+## Follow-up (test-only, trivial)
+
+**Trivial — no OpenSpec change**
+
+- `eval/test_customer_export.py`: expect `ChatGPT search` in PDF (matches `MODEL_DISPLAY_NAMES`).
+- `eval/conftest.py` + skip markers on three `execute_run` integration tests when `OPENAI_API_KEY` is unset.
+- Re-validation: `214 passed, 3 skipped` without key; `214 passed` with `OPENAI_API_KEY` set; `openspec validate --all --strict` still 6/6.
