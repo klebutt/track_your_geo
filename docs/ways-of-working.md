@@ -18,7 +18,7 @@ Vault project folder: `projects/track-your-geo/` (especially `status.md` and `ne
 
 1. **Orient (vault)** — Read Obsidian `status.md`; agree one goal.
 2. **Mirror (repo)** — Put that goal in [AGENTS.md](../AGENTS.md) → Current focus when agents will implement.
-3. **Build (Cursor)** — Follow AGENTS: plan (approve) → OpenSpec if needed → implement → `pytest eval -q`.
+3. **Build (Cursor)** — Follow AGENTS: plan (approve) → OpenSpec if needed → implement → `openspec validate --all --strict` → `pytest eval -q`.
 4. **Record** — Product behaviour changed → dated file under [docs/worklog/](worklog/). Session state → update vault `status.md`. Do **not** copy OpenSpec or formula files into Obsidian.
 
 ## Product brief
@@ -38,7 +38,7 @@ Kieran works mainly through **Grok Bot**, his primary assistant. Grok Bot routes
 | **Product Analyst** (bot) | Experiment design, thresholds, readouts |
 | **Sales Outreach** (bot) | Report packaging, outbound copy, reply handling, WTP logging |
 | **Business Development Manager** (bot) | AgentMail/domain, contacts, send queue, send ops |
-| **Cursor cloud agents** | Code changes on a branch → PR (with OpenSpec change + worklog when behaviour changes) |
+| **Cursor cloud agents** | Code changes on a branch → PR (with OpenSpec change + worklog when behaviour changes, or explicit `Trivial — no OpenSpec change` in the PR body) |
 
 **Flow for code:** Grok Bot writes a self-contained brief (goal, inputs, outputs, constraints, done signal) → cloud agent works on a `cursor/*` branch → PR → **Kieran reviews and merges** → Kieran deploys if needed → Grok Bot updates AGENTS.md + vault status.
 

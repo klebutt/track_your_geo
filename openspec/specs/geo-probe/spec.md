@@ -6,7 +6,7 @@ Local prototype for **Track Your GEO**: YAML pilots, batch LLM probes via LiteLL
 ## Requirements
 ### Requirement: Pilot configuration
 
-The system MUST load pilot profiles from YAML in the configured directory. Each profile MUST include `id`, `brand_name`, `location`, `competitors`, and `queries` (templates with optional `{brand}` and `{location}` placeholders). Each profile MAY include `url`, `aliases` (alternative name strings used for visibility matching), `industry`, `services`, `brand_domains` (explicit domains treated as brand-owned for citation classification), and `seed_domains` for legacy compatibility; the dashboard MUST NOT present `seed_domains` as live citations from model replies. Inferred profiles created via URL intake MUST satisfy the same required fields before probes execute.
+The system MUST load pilot profiles from YAML in the configured directory. Each pilot YAML MUST include `id`, `brand_name`, `location`, `competitors`, and `queries`. Each pilot MAY include `url`, `aliases`, `industry`, `services`, `brand_domains`, and legacy `seed_domains`. The dashboard MUST NOT present `seed_domains` as live citations from model replies. Inferred URL profiles MUST satisfy required fields before probes execute.
 
 #### Scenario: Load pilots for the UI
 
@@ -47,13 +47,7 @@ The system MUST execute each query template against every model in `TYGEO_ENABLE
 
 ### Requirement: Multi-provider GEO probes
 
-GEO probes MUST fan out sequentially across the comma-separated models in `TYGEO_ENABLED_PROBES` (default: `gpt-5-search-api`). The system MUST support:
-
-- **OpenAI search models** — Chat Completions search path (`gpt-5-search-api` or successor) with `web_search_options` and `url_citation` annotations
-- **Perplexity** (`perplexity/sonar-pro`) — top-level `citations` URL array
-- **Gemini** (`gemini/gemini-2.5-flash`) — `googleSearch` tool with grounding metadata
-
-Provider API keys MUST be read from `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, and `GEMINI_API_KEY` respectively. The system MUST NOT invent citation URLs outside model output.
+GEO probes MUST fan out sequentially across the comma-separated models in `TYGEO_ENABLED_PROBES` (default: `gpt-5-search-api`). The system MUST support OpenAI search models, Perplexity Sonar, and Gemini grounding paths as implemented in `tygeo/analysis.py`.
 
 #### Scenario: Multi-model run metadata
 
@@ -69,6 +63,15 @@ Provider API keys MUST be read from `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, and 
 
 - **WHEN** a Perplexity probe returns a `citations` array
 - **THEN** cited domains are extracted from those URLs before falling back to reply text parsing
+
+### Requirement: Probe provider API keys
+
+Provider API keys MUST be read from `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, and `GEMINI_API_KEY` respectively. The system MUST NOT invent citation URLs outside model output.
+
+#### Scenario: Keys from environment
+
+- **WHEN** a probe runs for a given provider
+- **THEN** LiteLLM reads that provider's API key from the corresponding environment variable
 
 ### Requirement: Web search probes for citations (OpenAI path)
 
@@ -137,34 +140,103 @@ The product MUST communicate that API completions are not identical to consumer 
 - **WHEN** a user opens the web UI
 - **THEN** a visible disclaimer explains that results are directional for this model path and not guaranteed parity with any consumer product
 
-### Requirement: Visibility and competitor signals
+### Requirement: Visibility rate from stored rows
 
-The system MUST compute visibility rate as the fraction of stored probe responses (across all enabled models) where the brand name **or any configured alias** appears as a case-insensitive substring in the assistant text. The system MUST store per-competitor boolean mention flags for each query.
+The system MUST compute visibility rate as the fraction of stored probe responses (across all enabled models) where `brand_mentioned` is true for that row.
 
-#### Scenario: Brand substring hit
+#### Scenario: Visibility aggregate
 
-- **WHEN** a stored assistant text contains the pilot brand substring
-- **THEN** the corresponding `query_results` row records `brand_mentioned` as true, otherwise false
+- **WHEN** a completed run has N stored probe rows and M of them have `brand_mentioned` true
+- **THEN** `visibility_rate` equals M divided by N
 
-#### Scenario: Alias substring hit
+### Requirement: Brand mention matching
 
-- **WHEN** a stored assistant text does not contain `brand_name` but does contain a configured alias as a case-insensitive substring
+Brand and alias mentions in assistant text MUST use `tygeo.brand_match` normalized phrase matching (not case-insensitive substrings). Matching MUST strip URLs, markdown links, and bare domains before comparison. Phrases MUST match as whole token sequences after normalization (NFKC, smart quotes, `&` → `and`, legal suffix stripping, markdown emphasis removal).
+
+#### Scenario: Brand phrase hit after normalization
+
+- **WHEN** a stored assistant text contains a normalized token-sequence match for `brand_name` or an expanded alias
 - **THEN** the corresponding `query_results` row records `brand_mentioned` as true
+
+### Requirement: Alias expansion for matching
+
+Matching MUST expand configured aliases with `display_name` (when set on the profile snapshot) and trading variants such as `{prefix} Accountants` derived from `& Co` names via `build_matching_aliases`.
+
+#### Scenario: Display name counts when configured
+
+- **WHEN** `display_name` is on the profile snapshot and appears in stored reply text as a normalized phrase
+- **THEN** `brand_mentioned` is true for that row
+
+### Requirement: Short alias token rule
+
+Configured aliases under four characters MUST count only as exact-case uppercase tokens (for example `SA`), not as substrings inside longer words.
+
+#### Scenario: Short alias inside longer word
+
+- **WHEN** alias `SA` appears only inside the word `Saffery` without a standalone `SA` token
+- **THEN** `brand_mentioned` is false for that alias hit
+
+### Requirement: Generic town accountants exclusion
+
+Two-word `{Town} Accountants` phrases MUST NOT count when the hit is only generic lowercase phrasing (for example "find Derby accountants") rather than a proper firm name.
+
+#### Scenario: Generic town accountants excluded
+
+- **WHEN** the only hit for alias "Derby Accountants" is generic lowercase phrasing without title-case firm styling
+- **THEN** `brand_mentioned` is false for that row
+
+### Requirement: Directory-style competitor guard
+
+Competitor mention flags MUST use `mentions_phrase` per configured competitor. Phrases MUST NOT match when embedded in directory-style names with blocked prefixes (`Your`, `The`, `Find`, `Top`, `Best`, `Local`, `Nearby`).
+
+#### Scenario: Competitor directory guard
+
+- **WHEN** a competitor name would match only inside "Your Riverside Accountants" style directory copy
+- **THEN** that competitor is not marked mentioned for the row
+
+### Requirement: Run rescore API
+
+The API MUST expose `POST /api/runs/{run_id}/rescore` for completed runs only.
+
+#### Scenario: Rescore refuses incomplete run
+
+- **WHEN** rescore is called for a run that is not `completed`
+- **THEN** the API returns an error and does not mutate rows
+
+### Requirement: Rescore recompute without probe LLM
+
+Rescore MUST recompute `brand_mentioned`, `competitors_mentioned`, `mention_position` (via `sync_mention_position`), and default sentiment/relevance when mentions flip, then recompute `visibility_rate` and `composite_score` from stored `response_text` without new probe or extraction LLM calls.
+
+#### Scenario: Rescore updates visibility
+
+- **WHEN** rescore runs after improved matching rules and stored text now matches the brand
+- **THEN** affected rows flip `brand_mentioned` to true and run-level `visibility_rate` increases accordingly
+
+### Requirement: Rescore drops stale recommendations
+
+Rescore MUST delete stored recommendations for the run and MUST NOT regenerate recommendations automatically.
+
+#### Scenario: Recommendations cleared
+
+- **WHEN** rescore completes on a run that had recommendations
+- **THEN** `GET /api/runs/{id}` returns an empty recommendations array until a new run is probed
 
 ### Requirement: Structured mention extraction
 
-When `brand_mentioned` is true for a probe row, the system MUST call a structured extraction LLM (`gpt-4o-mini` via LiteLLM, JSON response format) to populate `sentiment`, `mention_position`, and `relevance_score` on that row. When `brand_mentioned` is false, the system MUST skip extraction and MUST set defaults: `sentiment=neutral`, `mention_position=not_mentioned`, `relevance_score=0.0`.
-
-Extraction call cost and token usage MUST be aggregated into the run totals and recorded in `usage_log` with `phase: extraction`.
+When `brand_mentioned` is true for a probe row, the system MUST call a structured extraction LLM (`gpt-4o-mini` via LiteLLM, JSON response format) to populate `sentiment`, `mention_position`, and `relevance_score` on that row.
 
 #### Scenario: Extract on visible mention
 
-- **WHEN** a probe completes and the brand substring is found in the assistant text
+- **WHEN** a probe completes and the brand is considered mentioned for that row
 - **THEN** the system runs structured extraction and persists sentiment (`positive`, `neutral`, or `negative`), mention position (`first_mentioned`, `secondary`, or `not_mentioned`), and relevance score (0.0–1.0) on the row
+
+### Requirement: Extraction skipped when brand absent
+
+When `brand_mentioned` is false, the system MUST skip extraction and MUST set defaults: `sentiment=neutral`, `mention_position=not_mentioned`, `relevance_score=0.0`. Extraction call cost and token usage MUST be aggregated into run totals and recorded in `usage_log` with `phase: extraction` when extraction runs.
 
 #### Scenario: Skip extraction when brand absent
 
-- **WHEN** a probe completes and the brand substring is not found
+- **WHEN** a probe completes and the brand is not mentioned for that row
 - **THEN** the system does not call extraction for that row
 - **AND** no `phase: extraction` entry appears in `usage_log` for that query/model pair
 
@@ -286,7 +358,7 @@ The repository MUST ship tests for deterministic mention logic and at least one 
 
 ### Requirement: Runs from inferred URL profiles
 
-The system MUST allow analysis runs that use an inferred `PilotProfile` produced from URL intake, not only a pre-existing YAML `pilot_id`. Such runs MUST persist enough profile snapshot data on the run (brand name, location, aliases, competitors, queries, source URL) for later inspection and re-test. Existing `POST /api/runs` with `pilot_id` MUST continue to work unchanged.
+The system MUST allow analysis runs from URL-inferred `PilotProfile` objects as well as YAML `pilot_id` runs. URL runs MUST persist a profile snapshot (brand, location, aliases, competitors, queries, source URL) on the run record.
 
 #### Scenario: URL-inferred run persists profile snapshot
 

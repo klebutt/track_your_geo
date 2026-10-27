@@ -13,7 +13,7 @@ This **repo** is the build system (code, OpenSpec, worklogs, formula). The **Obs
 3. **Plan** — Post a **Plan (awaiting approval)** block (template below). **Do not change product code until the human approves**, except trivial fixes they delegated in the same message.
 4. **Spec** — Non-trivial work: OpenSpec propose/explore/apply skills (see `.cursor/skills/openspec-*`). Trivial fixes: skip new change folder.
 5. **Implement** — Small, reviewable diffs; follow approved plan and task list.
-6. **Validate** — `pytest eval -q`; manual UI smoke if UI/API touched; note LLM cost impact.
+6. **Validate** — `openspec validate --all --strict` (install CLI via `npx --yes @fission-ai/openspec@latest` if needed); `pytest eval -q`; manual UI smoke if UI/API touched; note LLM cost impact.
 7. **Record** — Update [docs/worklog/](docs/worklog/); archive OpenSpec change when done. Note doc impact in the PR body; Grok Bot updates the vault.
 
 ### Plan (awaiting approval) template
@@ -32,7 +32,7 @@ This **repo** is the build system (code, OpenSpec, worklogs, formula). The **Obs
 - [product_brief.md](product_brief.md) — journeys and MVP scope.
 - [docs/geo-scoring-realism.md](docs/geo-scoring-realism.md) — scoring limits and improvement options; required for probe/score/UI work.
 - **Probes:** brand-neutral questions only (no brand name in prompt text).
-- **Score:** Substring visibility gate + LLM extraction (sentiment, position) for composite GEO score; not consumer ChatGPT parity unless explicitly scoped.
+- **Score:** Normalized phrase visibility gate (`tygeo/brand_match`) + LLM extraction (sentiment, position) for composite GEO score; not consumer ChatGPT parity unless explicitly scoped.
 - **Demos:** YAML pilots under [apps/api/pilots/](apps/api/pilots/) (default `pilots/demo/`).
 - **Recommendations:** Enabled after each run — enriched LLM call using sentiment, position, citation gaps, and competitor signals (~$0.005/run). See §4 **Insights & optimization** in the dashboard.
 
@@ -44,8 +44,11 @@ This **repo** is the build system (code, OpenSpec, worklogs, formula). The **Obs
 - **Propose** (new change artifacts): `openspec-propose` skill
 - **Implement** (tasks): `openspec-apply-change` skill
 - **Archive** (done): `openspec-archive-change` skill
+- **Sync deltas → main specs:** `openspec-sync-specs` skill (used when archiving or backfilling specs)
 
 Use a new change when behavior, APIs, or user-visible contracts change materially.
+
+**Cloud-agent PRs:** Every PR that changes product behaviour MUST include an OpenSpec change (propose → implement → archive with synced specs) **or** an explicit line in the PR body: `Trivial — no OpenSpec change` (docs-only / comment-only / CI-only).
 
 ## Testing
 
